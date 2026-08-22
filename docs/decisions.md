@@ -37,7 +37,7 @@ This is the doc to open before an interview question that starts with "why did y
 
 **Alternatives considered:**
 
-- _Real email/SMS (e.g. Gmail SMTP)_ — the most "real" option, but reintroduces the Google dependency decision 1 deliberately avoided, needs real credentials, and risks landing in spam or failing during review. Would be the right call if the brief actually required real delivery — it doesn't.
+- _Real email/SMS_ — the most "real" option, and not actually blocked by decision 1 (outbound SMTP is used elsewhere, see decision 14) — rejected instead because it's a worse demo: an email risks landing in spam or arriving late, where a push notification via ntfy is instant and visible on screen. Would be the right call if the brief actually required real delivery for a business event like this — it doesn't, this is explicitly a simulated notification.
 - _Plain `console.log`_ — zero risk, zero dependency, but the least demoable and the least honest attempt at the event-driven JD line.
 - _Using ntfy for auth-credential delivery too (OTP codes)_ — considered and explicitly rejected, see `docs/notifications.md`'s scope boundary: pub/sub topics are broadcast by design, wrong shape for a credential.
 
@@ -135,13 +135,25 @@ This is the doc to open before an interview question that starts with "why did y
 
 ## 13. Signup email verification: documented, not built
 
-**Problem:** Classic email verification needs a real outbound email channel — which is the Gmail SMTP dependency decision 1 dropped specifically to avoid a Google dependency.
+**Problem:** Classic email verification needs a real outbound email channel, and building it would gate a flow the demo doesn't actually exercise.
 
-**Decision:** State the production answer (transactional email provider, e.g. Postmark/Resend/SES — not Gmail SMTP) in `docs/auth.md`; don't build it for this submission.
+**Decision:** State the production answer (a real transactional email provider) in `docs/auth.md`; don't build it for this submission.
 
 **Alternative considered:** Build it anyway, e.g. via a self-hosted dev-only mail catcher (MailHog/Mailpit). Rejected because it wouldn't actually deliver to the reviewer's real inbox — only captures mail locally — and the demo path doesn't exercise self-registration anyway: the reviewer signs into seeded accounts with real transaction history, since a freshly self-registered account has nothing to dispute (`docs/domain-model.md`'s seed data plan).
 
-**How it solves the problem:** Avoids reopening the exact external-dependency tradeoff decision 1 already resolved, for a flow (self-registration) the reviewed demo path doesn't use.
+**How it solves the problem:** Skips building a flow (self-registration) the reviewed demo path doesn't use, without pretending it wouldn't be needed in production.
+
+_Correction on this entry's original reasoning:_ the first version of this decision justified skipping email verification by equating it with the Gmail dependency decision 1 dropped — that was an overgeneralization. Decision 1 rejected Google **OAuth as the login mechanism**, where an outage blocks every login. Outbound SMTP is a notification channel, not a login gate — a slow or down mail provider delays a notification, it never blocks sign-in. Decision 14 uses outbound SMTP for exactly that reason; the two aren't in tension, and "avoid Google" was never actually the right reason to skip this one.
+
+## 14. Account-recovery & compromise alerts: build via outbound SMTP
+
+**Problem:** Password hashing and the login protections in decision 12 don't help _after_ a password has already leaked — an account owner needs a way to notice a compromise happened and recover from it.
+
+**Decision:** Provider-agnostic outbound SMTP (same shape `ubuntu-stories` uses — works with a Gmail App Password or any transactional provider), fire-and-forget and never on the login critical path, for: new-device/new-location login alerts, password-changed/email-changed confirmations (sent to the _old_ address), and self-service password reset. See `docs/auth.md` §3.
+
+**Alternative considered:** Skip it, same as signup verification (decision 13) — initially the plan, on the mistaken assumption that "avoid outbound email" was a blanket rule from decision 1. It wasn't: decision 1's objection was specifically to an external identity provider gating the login path itself. A notification channel that degrades to "the email arrives late" instead of "nobody can log in" doesn't carry that risk, and without it a compromised account has no recovery path short of manual support — a real gap, not a nice-to-have.
+
+**How it solves the problem:** Doesn't prevent credential theft (decision 12 covers prevention) — gives the real owner a way to _notice_ a compromise and _recover_ from one, which prevention alone can't do once a password is already in someone else's hands.
 
 <!-- Open / unresolved — add an entry above once decided:
 - DB engine: Postgres vs MySQL (see CLAUDE.md maintainer note — no functional difference for this brief, pick one and move on)

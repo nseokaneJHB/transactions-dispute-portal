@@ -38,7 +38,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - Package manager: pnpm + Turborepo (matches `ubuntu-stories`)
 - Frontend: TanStack Start
 - Backend: Fastify
-- Auth: Better Auth, plain email+password — deliberately not the passwordless email-OTP pattern `ubuntu-stories` uses; the brief never asked for passwordless/social login, and skipping it means no Gmail SMTP or Google OAuth dependency to carry over (see `docs/notifications.md`)
+- Auth: Better Auth, plain email+password — deliberately not the passwordless email-OTP or Google OAuth pattern `ubuntu-stories` uses; the brief never asked for passwordless/social login, so there's no external identity provider gating the login path (see `docs/auth.md`). Outbound SMTP is still used, but only for non-blocking account-recovery/compromise-alert email — never for login itself (`docs/auth.md` §3)
 - ORM: Drizzle
 - DB: Postgres (see maintainer note)
 - Tests: Vitest
@@ -48,7 +48,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 ## Explicitly out of scope
 
 - No real transaction/banking integration — data is seeded/simulated
-- No real notification delivery — simulated via self-hosted ntfy, see `docs/notifications.md` (no real email/SMS/push, no third-party ntfy.sh)
-- No Google OAuth or Gmail SMTP — no social login, no passwordless email-OTP; plain email+password needs neither
+- No real delivery of _dispute-status_ notifications — simulated via self-hosted ntfy, see `docs/notifications.md` (no third-party ntfy.sh). Auth-related email (account-recovery/compromise alerts) is real, see `docs/auth.md` §3 — different category, not a contradiction
+- No Google OAuth — no social login; plain email+password needs no external identity provider on the login path (`docs/auth.md`)
 - No live cloud deployment
 - No separate admin/reviewer portal — the brief is customer-facing only; `POST /internal/disputes/:id/resolve` is the demo stand-in
