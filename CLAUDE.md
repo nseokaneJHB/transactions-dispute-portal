@@ -18,6 +18,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - `docs/api.md` — the API surface (public + internal), error shape
 - `docs/domain-model.md` — entities, dispute lifecycle, seed data requirements, non-functional requirements
 - `docs/scaling-and-resilience.md` — what to build vs. what to document for scaling/failover/traffic questions
+- `docs/notifications.md` — ntfy for dispute-status events; scope boundary vs. auth-credential delivery (read before touching notifications)
 - `docs/porting-notes.md` — repo layout (flat: `api/`, `web/`, `shared/`, matching `ubuntu-stories` — `/home/nolan/Desktop/ubuntu-stories`, not the `ubuntustories`/`ubuntuStories` React Native decoys also on the Desktop), what to port, Docker habits
 - `docs/definition-of-done.md` — the completion checklist and suggested weekly pace
 
@@ -35,7 +36,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - Package manager: pnpm + Turborepo (matches `ubuntu-stories`)
 - Frontend: TanStack Start
 - Backend: Fastify
-- Auth: Better Auth
+- Auth: Better Auth, plain email+password — deliberately not the passwordless email-OTP pattern `ubuntu-stories` uses; the brief never asked for passwordless/social login, and skipping it means no Gmail SMTP or Google OAuth dependency to carry over (see `docs/notifications.md`)
 - ORM: Drizzle
 - DB: Postgres (see maintainer note)
 - Tests: Vitest
@@ -45,6 +46,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 ## Explicitly out of scope
 
 - No real transaction/banking integration — data is seeded/simulated
-- No real notification delivery — simulate only
+- No real notification delivery — simulated via self-hosted ntfy, see `docs/notifications.md` (no real email/SMS/push, no third-party ntfy.sh)
+- No Google OAuth or Gmail SMTP — no social login, no passwordless email-OTP; plain email+password needs neither
 - No live cloud deployment
 - No separate admin/reviewer portal — the brief is customer-facing only; `POST /internal/disputes/:id/resolve` is the demo stand-in
