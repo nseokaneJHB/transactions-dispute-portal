@@ -20,6 +20,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - `docs/domain-model.md` — entities, dispute lifecycle, seed data requirements, non-functional requirements
 - `docs/scaling-and-resilience.md` — what to build vs. what to document for scaling/failover/traffic questions
 - `docs/notifications.md` — ntfy for dispute-status events; scope boundary vs. auth-credential delivery (read before touching notifications)
+- `docs/auth.md` — how login credentials are verified as belonging to the signer-in: what's built (rate limiting, breach-check) vs. documented-only (email verification) and why
 - `docs/porting-notes.md` — repo layout (flat: `api/`, `web/`, `shared/`, matching `ubuntu-stories` — `/home/nolan/Desktop/ubuntu-stories`, not the `ubuntustories`/`ubuntuStories` React Native decoys also on the Desktop), what to port, Docker habits
 - `docs/definition-of-done.md` — the completion checklist and suggested weekly pace
 

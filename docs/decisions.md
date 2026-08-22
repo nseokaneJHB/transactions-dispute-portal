@@ -123,6 +123,26 @@ This is the doc to open before an interview question that starts with "why did y
 
 **How it solves the problem:** Catches "the app typechecks but the production image doesn't actually run" before submission, which is exactly the failure mode already hit twice while scaffolding.
 
+## 12. Login credential integrity: rate limiting + breach-check, not CAPTCHA
+
+**Problem:** Password hashing (decision 1) proves someone knew the secret paired with an account — it doesn't prove that secret wasn't guessed, brute-forced, or reused from a breach elsewhere. See `docs/auth.md` for the full writeup.
+
+**Decision:** Per-account rate limiting with progressive backoff on login, minimum password strength, and a HaveIBeenPwned Pwned-Passwords check (k-anonymity mode — the password itself is never sent) at signup/password-change, failing open on API unavailability.
+
+**Alternative considered:** A hosted CAPTCHA (hCaptcha/Turnstile/reCAPTCHA) in front of the login form. Same reasoning that ruled out Google OAuth (decision 1): an external dependency sitting in front of the one flow the reviewer has to use, for the one review event with no do-over. Would be the right call for a public-internet production deployment actually facing bot traffic at scale — not for a reviewed take-home.
+
+**How it solves the problem:** Covers the realistic attack surface (credential stuffing via reused/leaked passwords, brute force) with checks that degrade gracefully instead of introducing a new hard dependency on the login path.
+
+## 13. Signup email verification: documented, not built
+
+**Problem:** Classic email verification needs a real outbound email channel — which is the Gmail SMTP dependency decision 1 dropped specifically to avoid a Google dependency.
+
+**Decision:** State the production answer (transactional email provider, e.g. Postmark/Resend/SES — not Gmail SMTP) in `docs/auth.md`; don't build it for this submission.
+
+**Alternative considered:** Build it anyway, e.g. via a self-hosted dev-only mail catcher (MailHog/Mailpit). Rejected because it wouldn't actually deliver to the reviewer's real inbox — only captures mail locally — and the demo path doesn't exercise self-registration anyway: the reviewer signs into seeded accounts with real transaction history, since a freshly self-registered account has nothing to dispute (`docs/domain-model.md`'s seed data plan).
+
+**How it solves the problem:** Avoids reopening the exact external-dependency tradeoff decision 1 already resolved, for a flow (self-registration) the reviewed demo path doesn't use.
+
 <!-- Open / unresolved — add an entry above once decided:
 - DB engine: Postgres vs MySQL (see CLAUDE.md maintainer note — no functional difference for this brief, pick one and move on)
 -->
