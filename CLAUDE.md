@@ -13,6 +13,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 
 ## Read first
 
+- `docs/decisions.md` — the "why did you..." log: problem, decision, alternatives actually considered, how it solves the problem. Add an entry here the moment a real design decision gets made, not after.
 - `docs/codebase-index.md` — per-file map of the repo (what lives where). Check before grepping/exploring the tree from scratch. Not yet populated — fill it in as `api`/`web`/`shared` get scaffolded.
 - `docs/brief.md` — what this is, the brief, and why each non-trivial decision exists (JD mapping)
 - `docs/api.md` — the API surface (public + internal), error shape
