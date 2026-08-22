@@ -1,0 +1,32 @@
+{
+	"private": true,
+	"type": "module",
+	"version": "0.0.1",
+	"name": "@transaction-dispute-portal/web",
+	"scripts": {
+		"dev": "vite dev --port 3000",
+		"build": "vite build",
+		"start": "node server.mjs",
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint .",
+		"clean": "rm -rf node_modules dist .tanstack"
+	},
+	"dependencies": {
+		"@tailwindcss/vite": "4.3.0",
+		"@tanstack/react-router": "1.170.10",
+		"@tanstack/react-start": "1.168.17",
+		"@transaction-dispute-portal/shared": "workspace:*",
+		"react": "19.2.6",
+		"react-dom": "19.2.6",
+		"srvx": "0.11.22",
+		"tailwindcss": "4.3.0"
+	},
+	"devDependencies": {
+		"@types/node": "25.8.0",
+		"@types/react": "19.2.14",
+		"@types/react-dom": "19.2.3",
+		"@vitejs/plugin-react": "6.0.1",
+		"typescript": "6.0.3",
+		"vite": "8.0.13"
+	}
+}

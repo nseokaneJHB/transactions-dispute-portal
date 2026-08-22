@@ -1,0 +1,49 @@
+# Node modules
+node_modules/
+*/node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+*/dist/
+build/
+*/build/
+.next/
+.tanstack/
+*/.tanstack/
+coverage/
+*.tsbuildinfo
+
+# Turborepo cache
+.turbo/
+*/.turbo/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+!*/.env.example
+env/**/.env*
+!env/**/.env.example
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE / editor files
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Docker files
+*.env.docker
+
+# Misc
+*.swp
+*.tmp
+*.bak

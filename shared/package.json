@@ -1,0 +1,22 @@
+{
+	"private": true,
+	"type": "module",
+	"version": "0.0.1",
+	"name": "@transaction-dispute-portal/shared",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"dev": "tsc --watch --preserveWatchOutput",
+		"build": "tsc",
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint .",
+		"clean": "rm -rf node_modules dist"
+	},
+	"devDependencies": {
+		"typescript": "6.0.3"
+	}
+}

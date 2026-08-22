@@ -1,0 +1,29 @@
+{
+	"private": true,
+	"license": "ISC",
+	"type": "module",
+	"version": "0.0.1",
+	"name": "transaction-dispute-portal",
+	"author": "Nolan Seokane",
+	"packageManager": "pnpm@11.22.0",
+	"description": "Customer transaction dispute portal — Software Engineer II: Full Stack promotion submission",
+	"scripts": {
+		"dev": "turbo dev",
+		"build": "turbo build",
+		"lint": "turbo lint",
+		"format": "prettier --write .",
+		"typecheck": "turbo typecheck",
+		"test": "turbo test",
+		"clean": "rm -rf node_modules dist */node_modules */dist */.turbo .pnpm-store pnpm-lock.yaml web/.tanstack"
+	},
+	"devDependencies": {
+		"@eslint/js": "10.0.1",
+		"eslint": "10.4.0",
+		"eslint-config-prettier": "10.1.8",
+		"prettier": "3.8.3",
+		"prettier-plugin-tailwindcss": "0.8.0",
+		"turbo": "2.9.14",
+		"typescript": "6.0.3",
+		"typescript-eslint": "8.59.4"
+	}
+}

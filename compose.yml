@@ -1,0 +1,117 @@
+# =========================
+# DATABASE
+# =========================
+services:
+  transaction-dispute-portal-database:
+    image: postgres:18-alpine
+    restart: unless-stopped
+
+    env_file:
+      - ./env/${ENV:-development}/.env.database
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - transaction-dispute-portal-postgres_data:/var/lib/postgresql
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - transaction-dispute-portal
+
+  # =========================
+  # BACKEND API
+  # =========================
+  transaction-dispute-portal-api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile.dev
+
+    restart: unless-stopped
+
+    env_file:
+      - ./api/.env
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      transaction-dispute-portal-database:
+        condition: service_healthy
+
+    working_dir: /workspace
+
+    volumes:
+      - .:/workspace
+      - transaction-dispute-portal-node_modules:/workspace/node_modules
+      - transaction-dispute-portal-api-node_modules:/workspace/api/node_modules
+      - transaction-dispute-portal-shared-node_modules:/workspace/shared/node_modules
+
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "100"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://localhost:8080/healthz'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - transaction-dispute-portal
+
+  # =========================
+  # FRONTEND WEB
+  # =========================
+  transaction-dispute-portal-web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile.dev
+
+    restart: unless-stopped
+
+    env_file:
+      - ./web/.env
+
+    ports:
+      - "3000:3000"
+
+    depends_on:
+      transaction-dispute-portal-api:
+        condition: service_healthy
+
+    working_dir: /workspace
+
+    volumes:
+      - .:/workspace
+      - transaction-dispute-portal-node_modules:/workspace/node_modules
+      - transaction-dispute-portal-web-node_modules:/workspace/web/node_modules
+      - transaction-dispute-portal-shared-node_modules:/workspace/shared/node_modules
+
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "100"
+
+    networks:
+      - transaction-dispute-portal
+
+volumes:
+  transaction-dispute-portal-postgres_data:
+  transaction-dispute-portal-node_modules:
+  transaction-dispute-portal-api-node_modules:
+  transaction-dispute-portal-web-node_modules:
+  transaction-dispute-portal-shared-node_modules:
+
+networks:
+  transaction-dispute-portal:
+    driver: bridge

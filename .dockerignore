@@ -1,0 +1,45 @@
+# Dependencies
+node_modules
+*/node_modules
+.pnpm-store
+
+# Turbo / build cache
+.turbo
+dist
+*/dist
+build
+*/build
+coverage
+
+# Frontend build artifacts
+.tanstack
+*/.tanstack
+.vite
+
+# TypeScript
+*.tsbuildinfo
+
+# Git
+.git
+.gitignore
+
+# Editors
+.vscode
+.idea
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+*/.env
+env/**/.env*
+!env/**/.env.example
+
+# Logs
+*.log
+
+# Docs (not needed inside the image)
+docs
+CLAUDE.md
