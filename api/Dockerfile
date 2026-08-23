@@ -71,6 +71,11 @@ COPY --chown=node:node --from=prod-deps /workspace/shared/package.json ./shared/
 # Compiled output only — no source, no source maps, no devDependencies
 COPY --chown=node:node --from=build /workspace/api/dist ./api/dist
 COPY --chown=node:node --from=build /workspace/shared/dist ./shared/dist
+# SQL migrations — static files, not compiled, needed at runtime by
+# database/migrate.js (path resolved relative to cwd, ./src/database/migrations).
+# drizzle-kit itself (which generates these) stays a devDependency and
+# never ships in this image.
+COPY --chown=node:node --from=build /workspace/api/src/database/migrations ./api/src/database/migrations
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

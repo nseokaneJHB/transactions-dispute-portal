@@ -19,7 +19,14 @@ export default ts.config(
 	{
 		languageOptions: {
 			parserOptions: {
-				projectService: true,
+				projectService: {
+					// drizzle-kit config: outside api/tsconfig.json's `src/**/*`
+					// include (which sets `rootDir: "src"` for `tsc`'s build
+					// output — widening it there would break `outDir`), but
+					// still real TS worth type-aware linting via the default
+					// in-memory project.
+					allowDefaultProject: ["api/drizzle.config.ts"],
+				},
 			},
 		},
 	},
