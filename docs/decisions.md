@@ -301,4 +301,16 @@ _Revised by decision 25:_ the single `deploy.yml` `publish` job this decision de
 
 **How it solves the problem:** `build` and `deploy` now render as one connected job graph in a single Actions run — build's jobs feed directly into `staging` then `production` — without changing any of the actual build/test/publish logic decisions 24/25 already established.
 
+_Revised by decision 27:_ the `tags: [v*]` push trigger this decision describes is removed — see #27 for why and what replaces it.
+
+## 27. Production trigger: auto-created tag after staging succeeds, not a manual `v*` push
+
+**Problem:** Decision 26 still required Nolan to manually create and push a `v*` tag to reach production — a second, disconnected action outside the pipeline decision 26 had just made visually connected. That's backwards from the actual want: staging passing should be the trigger, with production surfacing as nothing more than a "Review deployments" approval button already sitting in the same run — no separate manual tagging step for a human to remember.
+
+**Decision:** `deploy.yml` drops the `tags: [v*]` push trigger entirely — it now runs only on `push: branches: [main]`. A new `tag` job runs `needs: staging` (so it waits for both `api` and `web` to reach staging), checks out full history (`fetch-depth: 0`), finds the highest existing `v*` tag, bumps the patch component, and `git tag`s + `git push`es the result using the job's own `contents: write`-scoped `GITHUB_TOKEN` — no PAT needed, since pushing a tag (unlike triggering a new run from one) works fine with the default token. `production` changes from `needs: build` / `if: startsWith(github.ref, 'refs/tags/v')` to plain `needs: tag`, and its image tag reads `${{ needs.tag.outputs.tag }}` instead of `${{ github.ref_name }}`. A `GITHUB_TOKEN`-authored push deliberately does not start a second workflow run (GitHub suppresses that specifically to prevent infinite loops) — that's relied on here, not worked around: production stays a job in the *same* run as staging, gated by `needs:`, rather than by a second run reacting to the tag.
+
+**Alternatives considered:** A PAT/deploy-key so the tag push could itself trigger a fresh `tags:`-scoped run — rejected, reintroduces the exact two-separate-runs problem decision 26 just fixed, plus a credential to manage for no benefit. Semantic version bump (major/minor) chosen by commit message convention (e.g. Conventional Commits) — deferred as unneeded process weight for a solo submission; every deploy is a patch bump, which is honest about what's actually happening (there's no release-branching workflow here to justify minor/major distinctions).
+
+**How it solves the problem:** Matches what was actually asked: push to `main`, staging deploys automatically, a version tag appears with no manual step, and the only thing a human sees or does is click approve on `production`.
+
 <!-- Open / unresolved — add an entry above once decided: -->
