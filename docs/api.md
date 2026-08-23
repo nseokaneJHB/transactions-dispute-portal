@@ -1,20 +1,29 @@
 # API surface
 
-Sketch — refine, don't reinvent. One consistent error shape everywhere: `{ error: { code, message } }`.
+Sketch — refine, don't reinvent. All routes below versioned under `/v1/` (`docs/decisions.md` #18) except health checks.
 
-## Public, customer-authenticated (Better Auth session)
+## Response envelope
 
-- `GET /api/transactions` — paginated, filterable by date range; scoped to current user
-- `GET /api/transactions/:id`
-- `POST /api/disputes` — body: `transactionId`, `reason`, `description`; idempotent — reject with a clear error if the transaction already has an open dispute (`submitted` or `under_review`), and treat a duplicate idempotency key as a no-op rather than a second row. This is the answer to "what happens on a client retry/double-click" and doubles as the one-open-dispute-per-transaction guard.
-- `GET /api/disputes` — the historic view: paginated, filterable by status
-- `GET /api/disputes/:id`
+Every response is `shared`'s `globalResponseSchema` (`shared/src/schema/global.ts` — `docs/decisions.md` #22): `{ code, message, redirectUrl?, errors? }`, `code` one of `HTTP_CODE` (`shared/src/constant.ts`). Endpoints that return a payload extend it per-endpoint with `data`, e.g. `globalResponseSchema.extend({ data: disputeSchema })` — not every response needs one (a bare `204`/redirect is valid as the base envelope alone). List endpoints use `paginatedGlobalResponseSchema` instead (adds `count`/`total`/`page`/`limit`), extended with `data` the same way. Validation failures populate `errors: [{ field, message }]`.
 
-## Internal only — not reachable via customer auth, kept out of any public API docs
+## Public, customer-authenticated (Better Auth session — email-OTP login, `docs/decisions.md` #21)
 
-- `POST /internal/disputes/:id/resolve` — simulates a reviewer decision so the status-change event has something to trigger from, in absence of a real reviewer portal. Gated by a separate shared-secret header (e.g. `x-internal-token`) checked in its own middleware, deliberately distinct from the customer session model.
+- `GET /v1/transactions` — paginated, filterable by date range; scoped to current user
+- `GET /v1/transactions/:id`
+- `POST /v1/disputes` — body: `transactionId`, `reason`, `description`; idempotent — reject with a clear error if the transaction already has an open dispute (`submitted` or `under_review`), and treat a duplicate idempotency key as a no-op rather than a second row. This is the answer to "what happens on a client retry/double-click" and doubles as the one-open-dispute-per-transaction guard.
+- `GET /v1/disputes` — the historic view: paginated, filterable by status
+- `GET /v1/disputes/:id`
 
-  A customer being able to resolve their own dispute would be a real hole in the authz story, not a shortcut — this keeps the two auth paths honestly separate and gives a second, demoable auth mechanism to talk about (curl-able live in an interview, no shelling into the codebase needed).
+## Admin, admin-session-authenticated (Better Auth session carrying `admin` role — `docs/decisions.md` #16)
+
+- `GET /v1/admin/disputes` — disputes needing review, paginated/filterable by status
+- `POST /v1/admin/disputes/:id/resolve` — the real reviewer-decision path; body carries the resolution + reason, written to `DisputeAuditLog` same as today
+- `POST /v1/admin/invites` — seeded/existing admin invites a new admin by email; sends a real invite email (`docs/auth.md` §3-adjacent, decision 19). No self-service admin signup — an account is only created by accepting an invite
+- `POST /v1/admin/invites/:token/accept` — accepts an invite, creates the account with `admin` role. Login is email-OTP for every account, admin or customer, so there's nothing else to set up (`docs/decisions.md` #21)
+
+  A customer being able to resolve their own dispute would be a real hole in the authz story, not a shortcut — this keeps the customer and admin auth paths honestly separate.
+
+  This is now the *only* resolve path. The original demo stand-in, `POST /internal/disputes/:id/resolve` (shared-secret `x-internal-token` header, no admin session), is removed — decision 16's open question resolved in favor of removing it, since keeping two live auth mechanisms for the same action was two things to explain instead of one.
 
 ## Health
 

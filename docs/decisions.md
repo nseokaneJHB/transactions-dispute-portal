@@ -6,18 +6,20 @@ This is the doc to open before an interview question that starts with "why did y
 
 ---
 
-## 1. Auth: email+password, not Google OAuth or passwordless email-OTP
+## 1. Auth: originally username+password, not Google OAuth or passwordless email-OTP
 
 **Problem:** Customers need to authenticate, and however that's done becomes the single thing every other feature depends on for the one review event that matters (no live back-and-forth with the panel).
 
-**Decision:** Plain Better Auth email+password. Passwords are hashed (scrypt, salted) by the library — never stored or logged in plaintext.
+**Decision:** Plain Better Auth username+password.
 
 **Alternatives considered:**
 
-- _Google OAuth_ — genuinely simpler in one narrow sense (no password hashes to store), but it relocates the sensitive-data problem rather than removing it: `GOOGLE_CLIENT_SECRET` custody, correct OAuth CSRF/PKCE handling, ID-token verification. It also adds a hard external dependency on Google's uptime and consent-screen rules for the one login flow the entire submission depends on — an unverified OAuth app shows warning screens to non-whitelisted accounts, a real risk when the reviewer's Google account was never added as a test user. Would be the right call for a project where social login is an actual requirement or where avoiding _any_ credential storage is a hard constraint (e.g. a strict compliance boundary) — neither applies here.
-- _Passwordless email-OTP_ (the `ubuntu-stories` pattern) — removes password storage too, but needs a real delivery channel (email/SMS) for the OTP code, which either means real Gmail SMTP (a Google dependency again) or an insecure stand-in. See decision 3.
+- _Google OAuth_ — relocates the sensitive-data problem rather than removing it: `GOOGLE_CLIENT_SECRET` custody, correct OAuth CSRF/PKCE handling, ID-token verification. It also adds a hard external dependency on Google's uptime and consent-screen rules for the one login flow the entire submission depends on — an unverified OAuth app shows warning screens to non-whitelisted accounts, a real risk when the reviewer's Google account was never added as a test user. Would be the right call for a project where social login is an actual requirement — not the case here.
+- _Passwordless email-OTP_ — needs a real delivery channel (email/SMS) for the one-time code, which either means real Gmail SMTP (a Google dependency again) or an insecure stand-in. See decision 3.
 
-**How it solves the problem:** Self-contained — no external identity provider, no delivery channel to build or depend on, works entirely inside `docker-compose up`. The security story is concrete and yours to defend: adaptive hashing, rate-limited auth endpoints (`@fastify/rate-limit`, decision 4), secure `httpOnly`/`SameSite` session cookies stored in Postgres (also what makes the API stateless, decision 8).
+**How it solves the problem:** Self-contained — no external identity provider, no delivery channel to build or depend on, works entirely inside `docker-compose up`.
+
+_Superseded by decision 21:_ reversed by explicit instruction — login is email-OTP, which is precisely the "insecure stand-in" / "real delivery channel" tradeoff this decision weighed and rejected. See #21 for the reversal, and the full "why not username+password" reasoning.
 
 ## 2. Dispute resolution: an internal-only route, not a customer-facing endpoint
 
@@ -28,6 +30,8 @@ This is the doc to open before an interview question that starts with "why did y
 **Alternative considered:** Let the customer's own session call a "resolve" endpoint on their own dispute. Simpler — one auth model, no second credential — but a customer resolving their own dispute is backwards for the domain (a panel reading dispute-resolution workflows would catch it immediately), and it's a real hole in the authz story we're otherwise careful about.
 
 **How it solves the problem:** Keeps two auth paths honestly separate instead of pretending a demo shortcut is customer behavior, and doubles as a second, deliberately-scoped auth mechanism to talk about — curl-able live in an interview, no shelling into the codebase needed.
+
+_Superseded by decision 16:_ a real (small) admin portal is now in scope; this route and `INTERNAL_API_TOKEN` are removed outright, not just demoted — see #16.
 
 ## 3. Notifications: self-hosted ntfy, not real email/SMS or a bare console.log
 
@@ -73,13 +77,13 @@ This is the doc to open before an interview question that starts with "why did y
 
 **How it solves the problem:** "Latest LTS, not latest period" is itself a small, correct engineering judgment call worth being able to explain, not just a version bump.
 
-## 7. `shared` compiles to `dist/`, unlike `ubuntu-stories`' pattern
+## 7. `shared` compiles to `dist/`, not `.ts` source directly
 
-**Problem:** The `api` package ships a compiled `dist/app.js` run by plain `node` in production (decision 9) — but `shared`'s `package.json` originally pointed `exports` straight at `.ts` source, copying `ubuntu-stories`' pattern.
+**Problem:** The `api` package ships a compiled `dist/app.js` run by plain `node` in production (decision 9) — but `shared`'s `package.json` originally pointed `exports` straight at `.ts` source.
 
 **Decision:** `shared` gets a real `tsc` build step; `exports` points at `dist/index.js`/`dist/index.d.ts`. `turbo.json`'s `typecheck` task depends on `^build` (not `^typecheck`) so `shared`'s `dist` exists before dependents typecheck.
 
-**Alternative considered:** Keep `shared` pointing at `.ts` source, like `ubuntu-stories`. Works fine there because `ubuntu-stories` has no production Dockerfile — everything runs via `tsx`/`vite`, both of which resolve `.ts` imports directly. This repo's `api` production image runs plain `node dist/app.js`, which can't resolve a `.ts` import target — the pattern would build in dev and break in the exact image meant to prove "production-grade."
+**Alternative considered:** Keep `shared` pointing at `.ts` source directly. Would work if every consumer ran via `tsx`/`vite`, both of which resolve `.ts` imports directly — but this repo's `api` production image runs plain `node dist/app.js`, which can't resolve a `.ts` import target. The pattern would build in dev and break in the exact image meant to prove "production-grade."
 
 **How it solves the problem:** Found by actually building and running the production Docker image, not by inspection — `pnpm build` failed with a real `tsc` error (`rootDir` ambiguity) the first time, which is the point of verifying rather than assuming a pattern transfers.
 
@@ -123,15 +127,17 @@ This is the doc to open before an interview question that starts with "why did y
 
 **How it solves the problem:** Catches "the app typechecks but the production image doesn't actually run" before submission, which is exactly the failure mode already hit twice while scaffolding.
 
-## 12. Login credential integrity: rate limiting + breach-check, not CAPTCHA
+## 12. Login credential integrity: rate limiting, not CAPTCHA
 
-**Problem:** Password hashing (decision 1) proves someone knew the secret paired with an account — it doesn't prove that secret wasn't guessed, brute-forced, or reused from a breach elsewhere. See `docs/auth.md` for the full writeup.
+**Problem:** Proving someone knew the right credential (decision 1) doesn't prove that credential wasn't guessed or brute-forced. See `docs/auth.md` for the full writeup.
 
-**Decision:** Per-account rate limiting with progressive backoff on login, minimum password strength, and a HaveIBeenPwned Pwned-Passwords check (k-anonymity mode — the password itself is never sent) at signup/password-change, failing open on API unavailability.
+**Decision:** Per-account rate limiting with progressive backoff on login.
 
 **Alternative considered:** A hosted CAPTCHA (hCaptcha/Turnstile/reCAPTCHA) in front of the login form. Same reasoning that ruled out Google OAuth (decision 1): an external dependency sitting in front of the one flow the reviewer has to use, for the one review event with no do-over. Would be the right call for a public-internet production deployment actually facing bot traffic at scale — not for a reviewed take-home.
 
-**How it solves the problem:** Covers the realistic attack surface (credential stuffing via reused/leaked passwords, brute force) with checks that degrade gracefully instead of introducing a new hard dependency on the login path.
+_Superseded by decision 21:_ the credential model this targeted no longer exists. Per-account rate limiting survives, retargeted from login-guessing to OTP-code-guessing — see `docs/auth.md` §1.
+
+**How it solves the problem:** Covers the realistic brute-force attack surface with a check that degrades gracefully instead of introducing a new hard dependency on the login path.
 
 ## 13. Signup email verification: documented, not built
 
@@ -145,16 +151,132 @@ This is the doc to open before an interview question that starts with "why did y
 
 _Correction on this entry's original reasoning:_ the first version of this decision justified skipping email verification by equating it with the Gmail dependency decision 1 dropped — that was an overgeneralization. Decision 1 rejected Google **OAuth as the login mechanism**, where an outage blocks every login. Outbound SMTP is a notification channel, not a login gate — a slow or down mail provider delays a notification, it never blocks sign-in. Decision 14 uses outbound SMTP for exactly that reason; the two aren't in tension, and "avoid Google" was never actually the right reason to skip this one.
 
+_Superseded by decision 17:_ revisited again — this is now actually built, not documented-only. See #17.
+
 ## 14. Account-recovery & compromise alerts: build via outbound SMTP
 
-**Problem:** Password hashing and the login protections in decision 12 don't help _after_ a password has already leaked — an account owner needs a way to notice a compromise happened and recover from it.
+**Problem:** The login protections in decision 12 don't help _after_ a credential has already leaked — an account owner needs a way to notice a compromise happened and recover from it.
 
-**Decision:** Provider-agnostic outbound SMTP (same shape `ubuntu-stories` uses — works with a Gmail App Password or any transactional provider), fire-and-forget and never on the login critical path, for: new-device/new-location login alerts, password-changed/email-changed confirmations (sent to the _old_ address), and self-service password reset. See `docs/auth.md` §3.
+**Decision:** Provider-agnostic outbound SMTP (works with a Gmail App Password or any transactional provider), fire-and-forget and never on the login critical path, for: new-device/new-location login alerts and email-changed confirmations (sent to the _old_ address). See `docs/auth.md` §3.
 
 **Alternative considered:** Skip it, same as signup verification (decision 13) — initially the plan, on the mistaken assumption that "avoid outbound email" was a blanket rule from decision 1. It wasn't: decision 1's objection was specifically to an external identity provider gating the login path itself. A notification channel that degrades to "the email arrives late" instead of "nobody can log in" doesn't carry that risk, and without it a compromised account has no recovery path short of manual support — a real gap, not a nice-to-have.
 
-**How it solves the problem:** Doesn't prevent credential theft (decision 12 covers prevention) — gives the real owner a way to _notice_ a compromise and _recover_ from one, which prevention alone can't do once a password is already in someone else's hands.
+**How it solves the problem:** Doesn't prevent credential theft (decision 12 covers prevention) — gives the real owner a way to _notice_ a compromise and _recover_ from one, which prevention alone can't do once a credential is already in someone else's hands.
 
-<!-- Open / unresolved — add an entry above once decided:
-- DB engine: Postgres vs MySQL (see CLAUDE.md maintainer note — no functional difference for this brief, pick one and move on)
--->
+_Narrowed by decision 21:_ one of the two original alerts is dropped, since it no longer applies — see `docs/auth.md` §3 for what's actually built now. New-device/new-location login alert and email-changed confirmation survive unchanged; email-changed confirmation is now arguably more load-bearing, since the account email isn't just a contact address, it's the entire credential.
+
+## 15. Local dev env files: committed with fresh secrets, not real ones
+
+**Problem:** `docker-compose up` should work out of the box on a clean checkout (`docs/definition-of-done.md`), which means the local dev env files need to exist and be committed. But committing real, working credentials — a Gmail App Password and a Google OAuth client secret tied to Nolan's real accounts — was on the table as a shortcut.
+
+**Decision:** Commit `api/.env`, `web/.env`, `env/development/.env.database` — but with freshly generated values (`BETTER_AUTH_SECRET`/`COOKIE_SECRET`/`INTERNAL_API_TOKEN`/Postgres password), never real ones, and SMTP pointed at a new local-only Mailpit service (`compose.yml`) instead of real Gmail. `.gitignore` gets an explicit allowlist exception for exactly these three paths, with a comment stating why they're safe (see the file itself).
+
+**Alternative considered:** Commit real, working `.env.api`/`.env.web`/`.env.database` values, as literally requested. Rejected outright — a real Gmail App Password and Google OAuth client secret committed here would publish live access to Nolan's actual Gmail account and Google Cloud project on a public GitHub repo, permanently (git history retains it even after a later deletion). Also moot: decision 1 already rejected Google OAuth for this project, so those specific values wouldn't even be used.
+
+**How it solves the problem:** Gets the real goal — clone-and-`docker-compose up` with zero manual setup — without the part of the request that would have leaked live credentials. Mailpit is a strict upgrade over reusing real Gmail for this purpose too: the account-recovery emails from decision 14 become viewable by anyone who clones the repo (`localhost:8025`), with no real email account, Nolan's or otherwise, required at all.
+
+_Superseded by decision 20:_ the "commit real, working values for zero setup" premise is reversed — every secret-shaped value in these three files is now blank, real values live in a gitignored `.env.local` per file, and `docker-compose up` needs a documented manual step first. The never-commit-real-secrets and Mailpit-over-real-Gmail parts of this decision still stand. See #20.
+
+## 16. Admin portal: a real (small) one, superseding the internal-token workaround
+
+**Problem:** Decision 2 built `/internal/disputes/:id/resolve` specifically because there was no admin/reviewer portal — a shared-secret header standing in for a UI that didn't exist. Revisited: a demo with an actual reviewer flow and real role-based access is a stronger answer than a header check, and worth showing.
+
+**Decision:** A minimal admin portal — a disputes-needing-review list and a resolve action, one or two pages — gated by a Better Auth session carrying an `admin` role, not a shared-secret header. Admin accounts are invite-only: a seeded admin (Nolan's own account) sends an invite email (real delivery via decision 19's local override; Mailpit for anyone else's clone) to a new admin; the invite link is what creates the account. No self-service admin signup.
+
+**Alternative considered:** Keep the internal-token route as the only resolve path, or keep it alive alongside the portal as a "this is what pure machine-to-machine access would look like" talking point. Both rejected: a shared-secret header alone doesn't show a role-based authz story, and two live auth mechanisms for the same action is two things to explain instead of one. Resolved: `/internal/disputes/:id/resolve` and `INTERNAL_API_TOKEN` are removed outright — `POST /v1/admin/disputes/:id/resolve` is the only resolve path now.
+
+**How it solves the problem:** A real role-based authz story (customer session vs. admin session, not two disconnected auth mechanisms) and a visual surface to demo resolution live, which a header-only route couldn't provide.
+
+## 17. Signup email verification: built, not documented-only (supersedes 13)
+
+**Problem:** Decision 13 skipped building this because the reviewed demo path signs into seeded accounts, not self-registered ones. Revisited: this models *real transactions* — a customer proving they own the email before they can dispute one is a real requirement, not just a nicety for a self-registration flow the demo doesn't exercise.
+
+**Decision:** Build it for real. Account status starts `unverified` at signup; a verification link goes out via outbound SMTP (decision 19's real local delivery, or Mailpit for anyone else's clone). The account is blocked from every action — not just soft-nudged — until the link is clicked. Seeded demo accounts ship pre-verified, so the reviewed path (signing into seeded accounts with real history) is never gated by an email round-trip.
+
+**Alternative considered:** Email OTP/magic-link replacing the login mechanism itself — rejected again, explicitly, here: that would put outbound email delivery on the login-critical path decision 1 protected. A signup-time verification gate only blocks the already-rare self-registration path, not every login, so it doesn't carry the same risk.
+
+**How it solves the problem:** Real proof of email ownership before a customer can act on transaction data, without reopening decision 1's login-path protection.
+
+_Superseded by decision 21:_ decision 1's login-path protection this decision was careful not to reopen gets reopened anyway, by explicit instruction — email-OTP login means every login already re-proves email ownership, which makes a separate one-time signup-verification gate redundant. Folded into the OTP decision rather than kept as a second, now-pointless step. See #21.
+
+## 18. API versioning: `/v1/` prefix
+
+**Problem:** No versioning scheme had been decided; unversioned routes (`/api/...`) don't communicate a compatibility contract, and it's a fair "how would you evolve this" question to have a real answer for.
+
+**Decision:** Public and admin routes move under `/v1/` — `/v1/disputes`, `/v1/transactions`, `/v1/admin/...`. Health checks (`/healthz`, `/readyz`) stay unversioned — they're infra probes, not API consumers.
+
+**Alternative considered:** Leave routes unversioned, add a prefix later if it ever matters. Cheaper today, but costs nothing to get right from the start versus retrofitting every route later.
+
+**How it solves the problem:** A small, standard, easy-to-defend convention instead of a retrofit under time pressure later.
+
+## 19. Real outbound email for local testing: gitignored `.env.local`, never committed
+
+**Problem:** Decision 15 rightly keeps `api/.env` pointed at Mailpit so a clean clone works with zero setup and no real credentials in git history — but that also means nobody, including Nolan, can see a real verification/invite email land in an actual inbox without a second, uncommitted path to real SMTP.
+
+**Decision:** `api/.env.local` — gitignored, matches the `.env.*` pattern in `.gitignore` — can hold a real Gmail App Password for local testing only. `compose.yml`'s api service lists it as a second, `required: false` `env_file` entry after `./api/.env`, so it layers on top (overrides matching keys) when present and is silently skipped otherwise — no manual setup needed for a fresh clone. `.dockerignore` excludes `.env.local`/`*/.env.local` so it never enters a build context even though the bind-mounted dev container would expose it locally anyway.
+
+**Alternative considered:** Commit the real credentials directly, as first asked. Rejected for the same reason decision 15 rejected it: a public repo's git history is permanent, and "this Gmail account is just for the demo" doesn't change that a committed App Password is live, working access until rotated.
+
+**How it solves the problem:** Real inbox delivery on demand for Nolan, zero risk to a fresh clone, zero change to decision 15's committed-file guarantee.
+
+_Superseded by decision 20:_ the `.env.local` override mechanism this decision introduced (for SMTP specifically) is generalized to every secret-shaped value, and decision 15's "commit working values for zero setup" premise is reversed. See #20.
+
+## 20. Committed env files hold blanked secrets, not working values — `.env.local` (no template) required per package
+
+**Problem:** Decision 15 committed `api/.env`/`web/.env`/`env/development/.env.database` with real, working values — freshly generated, never real ones — specifically so a clean clone runs zero-setup. Revisited: even a freshly-generated, external-account-free secret (`BETTER_AUTH_SECRET`, `POSTGRES_PASSWORD`) is still a real committed secret sitting in git history, and the preference now is that literally no secret — however low-stakes — is ever a real, working value in a committed file, full stop, not just the ones tied to an external account (which decision 19 already handled for SMTP alone).
+
+**Decision:** Every secret-shaped value in a committed env file is blank: `api/.env` blanks `DATABASE_URL`, `BETTER_AUTH_SECRET`, `COOKIE_SECRET`; `env/development/.env.database` blanks `POSTGRES_PASSWORD`. Non-secret operational config (`PORT`, `NODE_ENV`, `CORS_ORIGIN`, rate-limit numbers, `SMTP_HOST`/`PORT` pointed at the no-auth Mailpit catcher) stays real, since blanking those buys no security and only breaks the app for no reason. Real values live in a gitignored `.env.local` per package (`api/.env.local`, `env/development/.env.local.database`) — `compose.yml` loads each as a second, `required: false` `env_file` entry that overrides the committed file's (blank) value when present. Deliberately no committed `.example`/template file for these — the committed `.env` file already shows the exact key names; README.md's "Local setup" section is the instructions, not a second file to keep in sync.
+
+**Alternative considered:** Keep decision 15's model (real generated values committed, zero setup) and only carve out `.env.local` for genuinely external credentials (SMTP), as decision 19 originally scoped it. This is what was actually asked for and answered "keep zero-setup" one exchange earlier in this same session — revisited immediately after by explicit instruction, so recorded here as a real reversal, not a refinement: "no live secrets in git, however low-stakes" was judged worth losing the zero-`docker-compose up` convenience for.
+
+**How it solves the problem:** No secret of any kind, real-account-tied or not, is ever committed — at the direct cost of the `docker-compose up gives a working local stack` Definition-of-Done item now requiring a documented manual step first (README.md). `docs/definition-of-done.md` updated to reflect this.
+
+_Note while implementing:_ the pre-existing committed `DATABASE_URL` (`postgresql://postgres:secret@localhost:5432/...`) was already wrong on two counts, caught while rewriting this file — its password (`secret`) never matched `env/development/.env.database`'s actual generated `POSTGRES_PASSWORD`, and `localhost` isn't reachable as the DB host from inside the `api` container on the compose bridge network (the service name, `transaction-dispute-portal-database`, is). Moot now that the value is blank, but the correct shape is documented in `api/.env`'s comment so `.env.local` gets it right.
+
+## 21. Auth: email-OTP login, no password — reverses decision 1
+
+**Problem:** Restated from decision 1: customers need to authenticate, and however that's done becomes the single thing every other feature depends on for the one review event that matters. Decision 1 originally answered this with username+password. Revisited by explicit instruction: username+password is out, replaced with Better Auth's email-OTP plugin — every login sends a one-time code to the account's email instead.
+
+**Why not username+password:** a stored credential is something to get right forever — hashing, strength rules, breach-checking, reset flows, all of it a standing surface to defend. OTP collapses that entire category: there's no long-lived secret to store, guess, reuse from another breach, or reset, because the "credential" is a fresh one-time code proven by owning the inbox, every single login. It also removes a two-step gap decision 1 originally had (a one-time signup verification step, separate from every later login) — OTP re-proves email ownership on every login, so that separate step becomes redundant.
+
+**Decision:** Email-OTP is the only login mechanism. `docs/auth.md` covers the built controls (rate limiting/lockout on OTP verification attempts, short code expiry, audit log) and, separately, the dependency this creates. Consequences to other decisions, tracked at their source rather than restated here: decision 1 itself, decision 12, decision 17, decision 14.
+
+**Alternative considered:** Keep decision 1's original model. This was, in fact, the explicit answer given two exchanges earlier in this same session, before being reversed by explicit instruction — recorded here as what it is, a direct reversal of a decision made minutes earlier in the same conversation, not a refinement of it.
+
+**How it solves the problem:** Removes an entire category of standing credential-management risk, at the cost of reopening the exact dependency decision 1 was written to avoid: outbound email delivery is now on the path *every* login depends on, not zero logins as before.
+
+**Resolved:** Mailpit is accepted as sufficient for this project's dev and demo purposes — the committed config, no manual setup required. Real SMTP is documented as a production requirement (`docs/auth.md` §2), not built for this submission, the same "documented, not built" pattern decision 13 originally used. This sidesteps the question of exactly how the panel reviews the repo rather than needing to resolve it: Mailpit works locally either way (self-contained per `docker-compose up`, or watchable live if Nolan drives it), and the property that would otherwise be missing — real per-recipient isolation, since Mailpit has no per-user mailbox access control at all (confirmed against its docs; its only auth option is one shared credential for the whole UI, not per-mailbox) — is explicitly a production concern, resolved by not using Mailpit in production, not by fixing Mailpit.
+
+## 22. API response envelope: a generic `globalResponseSchema`/`paginatedGlobalResponseSchema`
+
+**Problem:** `docs/api.md` only had a placeholder error shape sketch (`{ error: { code, message } }`) — no real answer for success responses, field-level validation errors, or pagination metadata, and no schema anyone would actually import and use.
+
+**Decision:** Add a generic response envelope (`shared/src/schema/global.ts`) to this project's `shared` package as the default for every API response: `globalResponseSchema` (`code`, `message`, optional `redirectUrl`, optional `errors: [{ field, message }]`) and `paginatedGlobalResponseSchema` (adds `count`/`total`/`page`/`limit`). Endpoints extend either with `.extend({ data: ... })` per response — not built speculatively per-endpoint here, since there are no endpoints yet, just the base envelope and the pattern documented (`docs/api.md`). Only the minimal dependencies these two schemas actually need came with it — `shared/src/constant.ts` (`HTTP_CODE`/`HTTP_RESPONSE_CODE`, `ORDER_DIRECTION`, `DEFAULT_PAGE_LIMIT`/`NUMBER`) and `shared/src/schema/field.ts` (`stringSchema`, `numberSchema`, `httpCodeSchema`, `orderDirectionSchema`) — kept intentionally minimal, only what these two schemas actually need, nothing domain-specific bolted on speculatively (`CLAUDE.md`'s no-speculative-abstraction convention).
+
+**Alternative considered:** Keep the ad-hoc `{ error: { code, message } }` sketch and design a bespoke envelope from scratch. Rejected — a generic envelope with typed field-level errors and pagination metadata is a proven, standard shape, and building one now beats ad hoc per-endpoint shapes emerging later once real endpoints exist.
+
+**How it solves the problem:** A real, typed, reusable response contract instead of a one-line sketch. Caught one real bug while building it: `tsconfig.base.json`'s `moduleResolution: "Bundler"` doesn't rewrite relative-import extensions, but `shared`'s compiled output runs under plain Node ESM (decision 7) in `api`'s production image, which requires explicit `.js` extensions on relative imports. Fixed by adding `.js` extensions on every relative import in these files; verified by building `shared`, then actually running the compiled output through plain `node` (not just `tsc`), matching decisions 7-9's pattern of catching this class of bug by running the artifact, not inspecting the source.
+
+## 23. DB engine: Postgres, not MySQL
+
+**Problem:** Left open in CLAUDE.md's maintainer note as a real choice — no functional difference for this brief, pick one and move on.
+
+**Decision:** Postgres. Already the default throughout (`compose.yml`, `env/development/.env.database`) — this closes out the open question rather than changing anything.
+
+**How it solves the problem:** Removes the one remaining "still deciding" item before implementation starts; MySQL/RDS experience remains a fine talking point without needing the code to reflect it.
+
+## 24. CI/CD split into `build.yml`/`deploy.yml`; migrations run standalone, decoupled from API boot
+
+**Problem:** Two related gaps. First, the single `ci.yml` conflated verification (lint/typecheck/build/test, Docker build validation) with publishing — no separate place for the "deploy" half of CICD the JD grades on (`docs/brief.md`), and no live infra exists to deploy to (out of scope, `CLAUDE.md`). Second, no way to run Drizzle migrations independent of the API process — needed so a migration can be generated/applied from a developer's machine or a CI/CD step without the API running, and so schema changes aren't silently applied as a side effect of app boot.
+
+**Decision:** `ci.yml` renamed to `build.yml` (unchanged behavior — PR/push checks). New `deploy.yml` triggers on `build.yml` succeeding on `main` (`workflow_run`) or a `v*` tag push, builds both production images, and pushes them to GHCR (`ghcr.io/<owner>/transaction-dispute-portal-{api,web}`, tagged by commit SHA / `latest` / semver). This is the honest boundary given no live infra: publish a versioned, deployable artifact and stop — not fake a `kubectl apply`/deploy step against nothing.
+
+For migrations, layout follows Nolan's prior project (Ubuntu Stories) rather than an invented one, with two changes. First, naming: Ubuntu Stories calls the directory `drizzle/`, renamed `database/` here since that reads clearer than the tool name once the dev-tooling context (`drizzle-kit`) isn't the point. Second, consolidation: Ubuntu Stories splits its schema/migrations (`src/drizzle/`) from its connection code (`src/lib/database.ts`); here everything database-related — schema (`api/src/database/schema/`, barrel `index.ts`, per-entity files land here as `docs/domain-model.md` entities are implemented), generated migrations (`api/src/database/migrations/`, committed), the pooled connection (`api/src/database/config.ts`), and the standalone migration runner (`api/src/database/migrate.ts`, below) — lives together under one `api/src/database/` directory, all nested under `src`, not at the package root. `config.ts` is a `globalThis`-cached singleton, same reasoning as Ubuntu Stories: `tsx watch` (the dev script) hot-reloads the module on every save, and a naive `postgres()` call would open a fresh connection each reload until the pool is exhausted.
+
+One deliberate deviation from the Ubuntu Stories precedent, unrelated to the naming/layout choices above: Ubuntu Stories applies migrations via `npx drizzle-kit migrate` directly. That requires `drizzle-kit` — a devDependency — present wherever it runs, fine for a full-deps dev machine but not this project's pruned production image (no devDependencies by design, decision 8). So `api/src/database/migrate.ts` is a small standalone script instead, using `drizzle-orm`'s runtime migrator (not `drizzle-kit`) against the already-generated SQL in `src/database/migrations`, its own single (`max: 1`) connection separate from `config.ts`'s pool, and never imported by `app.ts`. `drizzle-kit` itself (`api/drizzle.config.ts`, `strict`/`verbose` on, matching the same precedent) stays generate-only. Driver: `postgres` (postgres.js) + `drizzle-orm/postgres-js`, also matching. The production `Dockerfile` copies `src/database/migrations` (static SQL) alongside the compiled `dist/`, so `node dist/database/migrate.js` works in the prod image with no `drizzle-kit` present — verified by actually running it inside the built container (fails cleanly on missing `DATABASE_URL`, as expected without a real DB attached). Locally, since `compose.yml` already publishes Postgres on `5432:5432`, `pnpm --filter @transaction-dispute-portal/api migrate` run from the host reaches the DB with no API process involved at all.
+
+**Alternatives considered:** Running migrations automatically on API startup (a common shortcut) — rejected, couples schema changes to every app boot/restart/scale-out event and gives no way to apply or dry-run a migration without also starting the API. Also considered matching Ubuntu Stories' `npx drizzle-kit migrate` exactly for consistency — rejected for the devDependency-in-prod reason above; the two projects intentionally fork here, not by oversight.
+
+**How it solves the problem:** `build.yml`/`deploy.yml` gives CICD a real, separately-visible build vs. publish story without overclaiming a live deploy target. The migration layout reuses a proven, already-battle-tested structure instead of inventing a new one, while the one place it deviates (the migrate mechanism) is deviated on purpose, for a documented, verified reason.
+
+<!-- Open / unresolved — add an entry above once decided: -->
