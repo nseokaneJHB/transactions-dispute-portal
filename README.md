@@ -21,6 +21,8 @@ Then edit the two new files (both gitignored, never committed):
   - Optional: `SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` with a real Gmail App Password, only if you want mail delivered to a real inbox instead of the local Mailpit catcher — see `docs/decisions.md` #19/#20.
 - **`env/development/.env.local.database`** — `POSTGRES_PASSWORD=<the same password you used above>`.
 
+`web/.env` (`VITE_APP_NAME`, `VITE_API_URL`) has no secrets and needs no local override — it's committed as-is and read directly by `compose.yml`.
+
 Then:
 
 ```sh
@@ -32,6 +34,15 @@ docker-compose up
 - Mailpit (caught local email): http://localhost:8025
 
 **Logging in:** login is email-OTP (`docs/decisions.md` #21) — enter an account's email, then check `http://localhost:8025` for the one-time code (the default committed config points SMTP at Mailpit, so nothing is ever really "sent" anywhere outside your own machine unless you filled in real Gmail creds above).
+
+## CI/CD
+
+`build.yml` runs lint/typecheck/build/test + a Docker build matrix on every push/PR. `deploy.yml` publishes `api`/`web` images to GHCR once `build.yml` succeeds:
+
+- **staging** — deploys automatically on every successful `build.yml` run on `main`. Images tagged `staging` and `sha-<commit>`.
+- **production** — triggers automatically on a `v*` tag push, but waits for a required reviewer to approve before running (GitHub Environments' protection rules, configured once in repo Settings → Environments → `production` → Required reviewers — not expressible in the workflow file itself). Images tagged `latest` and the tag name (e.g. `v1.2.0`).
+
+No live infra exists to deploy to (out of scope, `CLAUDE.md`) — "deploy" here means publishing a versioned, deployable image, which is the honest boundary given that. See `docs/decisions.md` #24.
 
 ## Docs
 

@@ -13,10 +13,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish image (${{ matrix.app }})
-    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
+  staging:
+    name: Deploy to staging (${{ matrix.app }})
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    environment: staging
     permissions:
       contents: read
       packages: write
@@ -26,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set lowercase image name
         id: image
@@ -43,24 +44,57 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.image.outputs.name }}
-          # context: git reads tags/branch off the actual checked-out commit
-          # rather than the workflow_run event, which doesn't carry them.
-          context: git
-          tags: |
-            type=sha,format=long
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-
-      - name: Build and push
+      - name: Build and push (staging)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.app }}/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ steps.image.outputs.name }}:staging
+            ${{ steps.image.outputs.name }}:sha-${{ github.event.workflow_run.head_sha }}
+
+  production:
+    name: Deploy to production (${{ matrix.app }})
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # Gated on a required reviewer — configured on the "production" environment
+    # in repo Settings → Environments, not expressible in this file. The job
+    # triggers automatically on a v* tag push, same as staging, but GitHub
+    # pauses it here until an authorized reviewer approves. See
+    # docs/decisions.md #24 for the one-time setup step and why it can't be
+    # done from the workflow itself.
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        id: image
+        run: |
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "name=ghcr.io/${owner}/transaction-dispute-portal-${{ matrix.app }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (production)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.app }}/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.ref_name }}
