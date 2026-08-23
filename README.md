@@ -37,10 +37,11 @@ docker-compose up
 
 ## CI/CD
 
-`build.yml` runs lint/typecheck/build/test + a Docker build matrix — on every PR/non-`main` push standalone, and on `main`/tag pushes as the first job of `deploy.yml` (called via `uses:`, so both show up as one connected run in the Actions tab instead of two separate entries — `docs/decisions.md` #26). `deploy.yml` publishes `api`/`web` images to GHCR once `build.yml`'s jobs succeed:
+`build.yml` runs lint/typecheck/build/test + a Docker build matrix — on every PR/non-`main` push standalone, and on `main` pushes as the first job of `deploy.yml` (called via `uses:`, so both show up as one connected run in the Actions tab instead of two separate entries — `docs/decisions.md` #26). `deploy.yml` then runs, in order, all in that same run:
 
-- **staging** — deploys automatically on every push to `main`. Images tagged `staging` and `sha-<commit>`.
-- **production** — triggers automatically on a `v*` tag push, but waits for a required reviewer to approve before running (GitHub Environments' protection rules, configured once in repo Settings → Environments → `production` → Required reviewers — not expressible in the workflow file itself). Images tagged `latest` and the tag name (e.g. `v1.2.0`).
+- **staging** — deploys both apps automatically once `build` passes. Images tagged `staging` and `sha-<commit>`.
+- **tag** — once staging passes for both apps, automatically bumps and pushes the next `v*` patch tag. No manual tagging step (`docs/decisions.md` #27).
+- **production** — waits for a required reviewer to approve ("Review deployments" button in the run, GitHub Environments' protection rules, configured once in repo Settings → Environments → `production` → Required reviewers — not expressible in the workflow file itself). Images tagged `latest` and the auto-created tag (e.g. `v1.2.0`).
 
 No live infra exists to deploy to (out of scope, `CLAUDE.md`) — "deploy" here means publishing a versioned, deployable image, which is the honest boundary given that. See `docs/decisions.md` #24.
 
