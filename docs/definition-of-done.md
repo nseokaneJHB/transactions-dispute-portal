@@ -5,14 +5,14 @@
 - [ ] View / dispute / historic-view all work end-to-end
 - [ ] Dispute lifecycle enforced server-side, not just in the UI
 - [ ] Auth scoping has a test proving you can't read another user's data
-- [ ] `POST /internal/disputes/:id/resolve` is unreachable via a customer session (test proves it)
+- [ ] `POST /v1/admin/disputes/:id/resolve` is unreachable via a customer session, and reachable only with the `admin` role (test proves both — `docs/decisions.md` #16)
 - [ ] Duplicate-dispute submission (retry/double-click) is rejected, not double-inserted
 - [ ] Seed data is realistic and voluminous enough to justify the pagination/indexing story
 - [ ] `/healthz` and `/readyz` exist and are wired into the k8s manifest's probes
 - [ ] One load-test number (p95 latency/RPS) is in the README
 - [ ] `docker build` + `docker run` work from a clean checkout
-- [ ] `docker-compose up` gives a working local stack incl. DB
-- [ ] README build/run/test steps verified on a clean machine
+- [ ] After following README.md's "Local setup" step (copy `.env` → `.env.local` per package, fill in blanks), `docker-compose up` gives a working local stack incl. DB — secrets are never committed working, even fake local-only ones (`docs/decisions.md` #20)
+- [ ] README build/run/test steps, including the `.env.local` setup step, verified on a clean machine
 - [ ] CI green on default branch
 - [ ] Repo is public
 

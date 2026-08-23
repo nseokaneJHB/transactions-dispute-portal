@@ -26,10 +26,16 @@ npm-debug.log*
 # Environment files
 .env
 .env.*
-!.env.example
-!*/.env.example
 env/**/.env*
-!env/**/.env.example
+
+# Exception: these three are the committed *local dev* env files (see
+# docs/decisions.md #15). Every value in them is generated fresh for this
+# repo and grants no access outside your own local docker-compose stack —
+# no real external credentials (SMTP/OAuth/etc.) ever belong here. Any
+# .env file NOT in this allowlist stays gitignored.
+!api/.env
+!web/.env
+!env/development/.env.database
 
 # OS generated files
 .DS_Store

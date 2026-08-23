@@ -35,7 +35,12 @@ Thumbs.db
 .env
 */.env
 env/**/.env*
-!env/**/.env.example
+
+# Local secret overrides (docs/decisions.md #19) — never enter any build
+# context, even though .env/.env.database already are excluded above;
+# .env.local is a different filename those patterns don't match.
+.env.local
+*/.env.local
 
 # Logs
 *.log

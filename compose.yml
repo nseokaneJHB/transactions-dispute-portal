@@ -8,6 +8,10 @@ services:
 
     env_file:
       - ./env/${ENV:-development}/.env.database
+      # Optional local-only override — real POSTGRES_PASSWORD, gitignored,
+      # never committed. See README.md "Local setup" / docs/decisions.md #20.
+      - path: ./env/${ENV:-development}/.env.local.database
+        required: false
 
     ports:
       - "5432:5432"
@@ -25,6 +29,20 @@ services:
       - transaction-dispute-portal
 
   # =========================
+  # MAILPIT (local SMTP catcher — see docs/auth.md #3)
+  # =========================
+  transaction-dispute-portal-mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+
+    ports:
+      - "8025:8025" # Web UI — view caught emails at http://localhost:8025
+      - "1025:1025" # SMTP — api's SMTP_HOST=mailpit points here
+
+    networks:
+      - transaction-dispute-portal
+
+  # =========================
   # BACKEND API
   # =========================
   transaction-dispute-portal-api:
@@ -36,6 +54,12 @@ services:
 
     env_file:
       - ./api/.env
+      # Optional local-only override (docs/decisions.md #19) — real SMTP
+      # creds for testing against a real inbox, gitignored, never
+      # committed. `required: false` means compose just skips it when the
+      # file doesn't exist, no manual setup needed for a fresh clone.
+      - path: ./api/.env.local
+        required: false
 
     ports:
       - "8080:8080"
@@ -65,7 +89,13 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
-      start_period: 10s
+      # 90s, not 10s: on a first-ever `docker-compose up`, the named
+      # node_modules volumes start empty, so pnpm self-heals with a full
+      # reinstall (~20-30s) before `tsx watch` can even start. A short
+      # start_period here marks the container unhealthy before it's had a
+      # real chance to boot — hit this exact failure while verifying the
+      # stack after adding the committed dev env files (docs/decisions.md #15).
+      start_period: 90s
 
     networks:
       - transaction-dispute-portal
