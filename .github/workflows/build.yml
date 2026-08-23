@@ -2,8 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches-ignore: [main]
   pull_request:
+  workflow_call:
 
 concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}
