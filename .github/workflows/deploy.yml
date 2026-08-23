@@ -1,11 +1,8 @@
 name: Deploy
 
 on:
-  workflow_run:
-    workflows: [Build]
-    types: [completed]
-    branches: [main]
   push:
+    branches: [main]
     tags: ["v*"]
 
 concurrency:
@@ -13,9 +10,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build:
+    name: Build
+    # Calls build.yml as a reusable workflow instead of linking two separate
+    # workflow runs via workflow_run — this is what makes Build show up as a
+    # connected stage in Deploy's own run graph instead of a second,
+    # loosely-related entry in the Actions tab.
+    uses: ./.github/workflows/build.yml
+
   staging:
     name: Deploy to staging (${{ matrix.app }})
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: staging
     permissions:
@@ -26,8 +32,6 @@ jobs:
         app: [api, web]
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set lowercase image name
         id: image
@@ -52,17 +56,18 @@ jobs:
           push: true
           tags: |
             ${{ steps.image.outputs.name }}:staging
-            ${{ steps.image.outputs.name }}:sha-${{ github.event.workflow_run.head_sha }}
+            ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
 
   production:
     name: Deploy to production (${{ matrix.app }})
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     # Gated on a required reviewer — configured on the "production" environment
     # in repo Settings → Environments, not expressible in this file. The job
     # triggers automatically on a v* tag push, same as staging, but GitHub
     # pauses it here until an authorized reviewer approves. See
-    # docs/decisions.md #24 for the one-time setup step and why it can't be
+    # docs/decisions.md #25 for the one-time setup step and why it can't be
     # done from the workflow itself.
     environment: production
     permissions:
