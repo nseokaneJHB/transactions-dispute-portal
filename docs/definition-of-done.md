@@ -11,8 +11,8 @@
 - [ ] `/healthz` and `/readyz` exist and are wired into the k8s manifest's probes
 - [ ] One load-test number (p95 latency/RPS) is in the README
 - [ ] `docker build` + `docker run` work from a clean checkout
-- [ ] After following README.md's "Local setup" step (copy `.env` → `.env.local` per package, fill in blanks), `docker-compose up` gives a working local stack incl. DB — secrets are never committed working, even fake local-only ones (`docs/decisions.md` #20)
-- [ ] README build/run/test steps, including the `.env.local` setup step, verified on a clean machine
+- [ ] `docker compose up` on a clean checkout gives a working local stack incl. DB, zero setup — `.env` files are committed with working local values (`docs/decisions.md` #34)
+- [ ] README build/run/test steps verified on a clean machine
 - [ ] CI green on default branch
 - [ ] Repo is public
 

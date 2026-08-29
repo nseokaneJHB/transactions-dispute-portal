@@ -34,7 +34,7 @@ There is no separate recovery credential: email access *is* the credential. If s
 
 Provider-agnostic SMTP config (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` — works with a Gmail App Password or any transactional provider).
 
-Committed `api/.env` points `SMTP_HOST`/`SMTP_PORT` at the local Mailpit catcher — mail is captured locally, no auth needed so nothing there is secret. To have OTP codes and recovery/invite emails land in a real inbox instead, fill in `SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` with a real Gmail App Password in `api/.env.local` — gitignored, never committed, README.md's "Local setup" section has the steps; see `docs/decisions.md` #20.
+Committed `api/.env` points `SMTP_HOST`/`SMTP_PORT` at the local Mailpit catcher — mail is captured locally, no auth needed so nothing there is secret. To have OTP codes and recovery/invite emails land in a real inbox instead, put a real Gmail App Password in `SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` — either directly in `api/.env` or in an untracked `api/.env.local` (the only env file still gitignored); see `docs/decisions.md` #34.
 
 ## Explicitly rejected: CAPTCHA / third-party bot detection on login
 

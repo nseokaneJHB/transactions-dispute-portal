@@ -175,7 +175,7 @@ _Narrowed by decision 21:_ one of the two original alerts is dropped, since it n
 
 **How it solves the problem:** Gets the real goal — clone-and-`docker-compose up` with zero manual setup — without the part of the request that would have leaked live credentials. Mailpit is a strict upgrade over reusing real Gmail for this purpose too: the account-recovery emails from decision 14 become viewable by anyone who clones the repo (`localhost:8025`), with no real email account, Nolan's or otherwise, required at all.
 
-_Superseded by decision 20:_ the "commit real, working values for zero setup" premise is reversed — every secret-shaped value in these three files is now blank, real values live in a gitignored `.env.local` per file, and `docker-compose up` needs a documented manual step first. The never-commit-real-secrets and Mailpit-over-real-Gmail parts of this decision still stand. See #20.
+_Superseded by decision 20, then largely restored by decision 34:_ #20 reversed the "commit working values" premise (blank secrets + a gitignored `.env.local` per file); #34 reverses that reversal — the committed `.env` files hold working local values again, since they're fake local-only secrets with nothing to leak. The never-commit-*real-account* credentials and Mailpit-over-real-Gmail parts still stand. See #34.
 
 ## 16. Admin portal: a real (small) one, superseding the internal-token workaround
 
@@ -219,7 +219,7 @@ _Superseded by decision 21:_ decision 1's login-path protection this decision wa
 
 **How it solves the problem:** Real inbox delivery on demand for Nolan, zero risk to a fresh clone, zero change to decision 15's committed-file guarantee.
 
-_Superseded by decision 20:_ the `.env.local` override mechanism this decision introduced (for SMTP specifically) is generalized to every secret-shaped value, and decision 15's "commit working values for zero setup" premise is reversed. See #20.
+_Superseded by decision 20, then decision 34:_ #20 generalized this `.env.local` override to every secret-shaped value; #34 removes the override files entirely (`api/.env.local` deleted) — real Gmail creds for local testing now go straight into `api/.env`, or a personal untracked `api/.env.local` if preferred. See #34.
 
 ## 20. Committed env files hold blanked secrets, not working values — `.env.local` (no template) required per package
 
@@ -232,6 +232,8 @@ _Superseded by decision 20:_ the `.env.local` override mechanism this decision i
 **How it solves the problem:** No secret of any kind, real-account-tied or not, is ever committed — at the direct cost of the `docker-compose up gives a working local stack` Definition-of-Done item now requiring a documented manual step first (README.md). `docs/definition-of-done.md` updated to reflect this.
 
 _Note while implementing:_ the pre-existing committed `DATABASE_URL` (`postgresql://postgres:secret@localhost:5432/...`) was already wrong on two counts, caught while rewriting this file — its password (`secret`) never matched `env/development/.env.database`'s actual generated `POSTGRES_PASSWORD`, and `localhost` isn't reachable as the DB host from inside the `api` container on the compose bridge network (the service name, `transaction-dispute-portal-database`, is). Moot now that the value is blank, but the correct shape is documented in `api/.env`'s comment so `.env.local` gets it right.
+
+_Superseded by decision 34:_ the blank-secret model is reversed. `api/.env` and `env/.env.database` are committed with working local values (fake Postgres password, freshly-generated auth secrets); the `.env.local` override files are deleted. The reasoning that flipped #15 → #20 (a generated secret in git history is still a secret in git history) was judged, on reflection, to cost more than it's worth for a repo whose secrets are local-only fakes with no live deployment behind them. See #34.
 
 ## 21. Auth: email-OTP login, no password — reverses decision 1
 
@@ -291,6 +293,8 @@ _Revised by decision 25:_ the single `deploy.yml` `publish` job this decision de
 
 **How it solves the problem:** Matches the actual requirement — automatic where nothing should block deployment, a real human approval gate exactly where one was asked for — using GitHub's built-in Environment protection mechanism rather than a bespoke `workflow_dispatch`-and-hope approval step. The `docker/metadata-action` removal converts a bug found in production (well, in the one CI run that counts) into a permanently smaller failure surface, verified by that fix landing before the next push.
 
+_Superseded by decision 34:_ the `production` job and the `production` GitHub Environment are removed. With no live infra (and none ever planned), a second gated tier was modelling a promotion that never happens — `staging` is the only deploy target, and it takes the `latest` tag. The `docker/metadata-action` removal and the explicit-tags-from-context approach still stand. See #34.
+
 ## 26. `deploy.yml` calls `build.yml` via `workflow_call`, not `workflow_run`
 
 **Problem:** With `workflow_run` (decisions 24/25), `build.yml` and `deploy.yml` were two independently-triggered workflow runs, only loosely linked by GitHub inferring the relationship from the trigger — they showed up as two separate entries in the Actions tab with no connected job graph between them. That's a worse "map" of the pipeline than the JD's CICD line calls for: you can't see build → staging → production as one flow at a glance, you have to click into `build.yml`'s run, note it succeeded, then separately find the `deploy.yml` run it triggered.
@@ -303,6 +307,8 @@ _Revised by decision 25:_ the single `deploy.yml` `publish` job this decision de
 
 _Revised by decision 27:_ the `tags: [v*]` push trigger this decision describes is removed — see #27 for why and what replaces it.
 
+_Narrowed by decision 34:_ the connected-graph point stands, but the graph is now `build → staging` only (the `tag` and `production` jobs are gone). See #34.
+
 ## 27. Production trigger: auto-created tag after staging succeeds, not a manual `v*` push
 
 **Problem:** Decision 26 still required Nolan to manually create and push a `v*` tag to reach production — a second, disconnected action outside the pipeline decision 26 had just made visually connected. That's backwards from the actual want: staging passing should be the trigger, with production surfacing as nothing more than a "Review deployments" approval button already sitting in the same run — no separate manual tagging step for a human to remember.
@@ -312,6 +318,8 @@ _Revised by decision 27:_ the `tags: [v*]` push trigger this decision describes 
 **Alternatives considered:** A PAT/deploy-key so the tag push could itself trigger a fresh `tags:`-scoped run — rejected, reintroduces the exact two-separate-runs problem decision 26 just fixed, plus a credential to manage for no benefit. Semantic version bump (major/minor) chosen by commit message convention (e.g. Conventional Commits) — deferred as unneeded process weight for a solo submission; every deploy is a patch bump, which is honest about what's actually happening (there's no release-branching workflow here to justify minor/major distinctions).
 
 **How it solves the problem:** Matches what was actually asked: push to `main`, staging deploys automatically, a version tag appears with no manual step, and the only thing a human sees or does is click approve on `production`.
+
+_Superseded by decision 34:_ the `tag` job and the `production` job are both removed. Without a `production` promotion there's nothing for an auto-created version tag to mark, so `deploy.yml` is just `build → staging`. See #34.
 
 ## 28. Drizzle schema & Better Auth wiring: mirror the Ubuntu Stories house style, don't invent one
 
@@ -391,6 +399,8 @@ New committed env files follow the #20 pattern (every secret-shaped key blank, r
 
 **How it solves the problem:** One command each — `docker compose up` for dev (unchanged), `docker compose -f compose.yml up --build` for the production dry-run — from one base file plus a diff.
 
+_Revised by decision 34:_ the base/override split and the merge mechanics stand, but "production" becomes "staging" — there's no production tier anywhere now. Both files read the committed `./api/.env` / `./web/.env` / `./env/.env.database` directly (no `*.production` files, no `!override` on `env_file`, no `*.local` siblings). The distinct-`image:`-names gotcha still applies. See #34.
+
 ## 33. Database migrations: a manually-triggered GitHub Actions workflow
 
 **Problem:** #24 built the standalone migration runner (`api/src/database/migrate.ts`) but nothing invoked it in CI/CD. A migration should be a deliberate, auditable action against a chosen environment — not automatic on deploy, and not only runnable from a laptop.
@@ -404,5 +414,23 @@ Also tweaked `api/src/database/migrate.ts`: `onnotice: () => {}` on the `postgre
 **Alternative considered:** Run migrations from `deploy.yml` automatically before the app rolls out. Rejected for the same reason #24 decoupled migration from API boot — a schema change should be its own reviewed step with its own approval, not a side effect of shipping code. The runner uses a fresh `pnpm install` rather than the GHCR image, so the migration path and the deployed-artifact path are independent (chosen deliberately).
 
 **How it solves the problem:** A migration is now one button in the Actions UI, gated and audited per environment, ready the moment a database exists.
+
+_Revised by decision 34:_ staging-only — the `staging`/`production` environment choice input is removed (`environment: staging` hardcoded, `concurrency: migrate-staging`). Everything else (the `drizzle-kit check` pre-flight, the `DATABASE_URL` guard, dormancy) is unchanged. See #34.
+
+## 34. Collapse to one committed `.env` per package; drop the production tier
+
+**Problem:** Decisions #15 → #19 → #20 spent three rounds on committed env files, landing on: every secret-shaped key blank in the committed `.env`, real values in a gitignored `.env.local` sibling, `compose.yml` layering the two. And #24 → #25 → #27 built a `build → staging → tag → production` pipeline with a required-reviewer gate on a `production` GitHub Environment. Revisited by explicit instruction: both are more machinery than this project needs. The "secrets" involved are a local Postgres password and two freshly-generated auth secrets — no external-account access, and (`CLAUDE.md`) no live deployment they could ever leak into. The `production` tier gates a promotion that will never happen.
+
+**Decision:**
+
+- **One committed `.env` per package, holding working local values.** `api/.env` carries a real `DATABASE_URL`, `BETTER_AUTH_SECRET`, `COOKIE_SECRET`; new `env/.env.database` carries a real `POSTGRES_PASSWORD`. `web/.env` unchanged (no secrets). Deleted: `api/.env.local`, `api/.env.production`, `web/.env.production`, `env/development/`, `env/production/`. No `.env.staging` / `.env.production` variants — one file, used by both the dev override and the staging base. `.gitignore` now ignores only `*.env.local` (a personal, untracked override anyone can still add); `.dockerignore` keeps its `.env*` globs (env is a runtime concern, never baked). No comments in any env file.
+- **No production tier.** `deploy.yml` is `build → staging` — the `tag` (auto version-bump) and `production` (gated) jobs are deleted, and `staging` now also pushes `:latest` since nothing else claims it. `migrate.yml` is staging-only. The `production` GitHub Environment and its required-reviewer rule are no longer used.
+- **`compose.yml` is the staging base** (was "production"); it and `compose.override.yml` both read `./api/.env` etc. directly, so the override no longer needs an `env_file` block at all.
+
+**Alternative considered:** Keep #20's blank-secret model and only drop the `.env.production` split. Rejected — if the committed values are fake local-only secrets anyway (which #15 already established and #20 didn't dispute), blanking them protects nothing and just adds a mandatory copy-and-fill step to every fresh clone. The honest position is either "these are real secrets, keep them out" or "these are fakes, commit them" — #20 was trying to have it both ways.
+
+**How it solves the problem:** `docker compose up` works on a clean clone again with zero setup (reversing #20's regression on the DoD item), and the pipeline describes exactly what exists — one build, one staging publish — instead of a promotion flow with no destination. Cost: the repo now contains working (fake) secrets in git history, accepted deliberately for a repo whose threat model is "a promotion panel reads it."
+
+_Known wart:_ the staging-only `docker compose -f compose.yml up` inherits `SMTP_HOST=mailpit` from `api/.env` but has no Mailpit service (that's dev-override only), so OTP sends fail there — silently, since `sendEmail` swallows transport errors (#31). Fine for a staging image sanity-check; a real deployment sets real SMTP.
 
 <!-- Open / unresolved — add an entry above once decided: -->
