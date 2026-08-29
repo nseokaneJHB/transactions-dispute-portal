@@ -31,16 +31,14 @@ coverage
 .DS_Store
 Thumbs.db
 
-# Environment files
-.env
-*/.env
+# Environment files — none of these belong in a build context. The images
+# get their config at runtime, not bake time; the `.local` / `.production`
+# variants also hold real secrets (docs/decisions.md #19, #20). The `.env*`
+# globs cover every variant: .env, .env.local, .env.production,
+# .env.production.local, env/production/.env.database, etc.
+.env*
+*/.env*
 env/**/.env*
-
-# Local secret overrides (docs/decisions.md #19) — never enter any build
-# context, even though .env/.env.database already are excluded above;
-# .env.local is a different filename those patterns don't match.
-.env.local
-*/.env.local
 
 # Logs
 *.log
