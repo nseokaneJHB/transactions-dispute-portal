@@ -1,7 +1,5 @@
 import Fastify from "fastify";
 
-// Placeholder entry point — replace with the real build()/app.ts split
-// (auth, drizzle, routes) once the domain model lands. See docs/api.md.
 const app = Fastify({ logger: true });
 
 app.get("/healthz", async () => ({ status: "ok" }));
