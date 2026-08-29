@@ -313,4 +313,96 @@ _Revised by decision 27:_ the `tags: [v*]` push trigger this decision describes 
 
 **How it solves the problem:** Matches what was actually asked: push to `main`, staging deploys automatically, a version tag appears with no manual step, and the only thing a human sees or does is click approve on `production`.
 
+## 28. Drizzle schema & Better Auth wiring: mirror the Ubuntu Stories house style, don't invent one
+
+**Problem:** The domain + auth tables (`docs/domain-model.md`) needed a concrete Drizzle schema, and Better Auth needed to be wired to it. Two ways to go: design a fresh convention for this repo, or reuse the one from Nolan's prior production project (Ubuntu Stories).
+
+**Decision:** Follow the Ubuntu Stories house style verbatim, because "consistent with a codebase already in production" is a stronger signal than a bespoke convention invented for a one-month submission. Concretely:
+
+- **One table per file** under `api/src/database/schema/`, each exporting `XxxModel` (a `pgTable`), plus per-model `XxxModelInsert` / `XxxModelSelect` (`$inferInsert`/`$inferSelect`) and a hand-written `XxxModelUniqueWhere` union of the columns a row can be uniquely fetched by. snake_case columns, `uuid` PKs, `created_at`/`updated_at` with `withTimezone` and `$onUpdate(() => sql\`now()\`)`.
+- **Relations live in one central `relations.ts`**, not colocated with each table — matches Ubuntu Stories and keeps the table files free of cross-imports beyond FK targets.
+- **`pgEnum` for every enum** (`userRole`, `disputeStatus`, `disputeReason`, `authEvent`), generated from the SCREAMING_SNAKE constant objects in `shared/src/constant.ts` so the DB, the wire contract, and the TS union all come from one source. DB-level enum enforcement over a bare `varchar` + app check.
+- **`bigint("amount_cents", { mode: "number" })` for money** (ZAR minor units), not `numeric` — integer cents avoid float/decimal representation questions entirely, and `mode: "number"` keeps it a plain JS number since values stay well inside `Number.MAX_SAFE_INTEGER` for this domain.
+- **Partial unique index for the one-open-dispute guard** (ties to #4): `uniqueIndex("dispute_open_per_transaction_uq_idx").on(transaction_id).where(sql\`status in ('SUBMITTED', 'UNDER_REVIEW')\`)` — the "reject a second dispute while one is open" rule from #4 enforced in the schema, not just the handler.
+- **`auth_audit_log` is keyed by `email`, not a `user_id` FK** (with `user_id` a nullable `set null` reference on top) — a failed login attempt may name an email that resolves to no user, and that attempt is exactly what the log needs to capture.
+- **Better Auth uses `drizzleAdapter` with explicit split tables + `fields` maps** — `user`/`account`/`session`/`verification` are our own `pgTable`s with our column names, and each Better Auth field is mapped to its snake_case column rather than letting the adapter auto-create tables. `emailAndPassword: { enabled: false }`, `emailOTP` plugin only (`disableSignUp: true`, 6-digit, hashed at rest, 10-min expiry, 5 attempts — see #21 / `docs/auth.md`). `advanced.database.generateId` routes Better Auth's own row IDs through `lib/util.ts`'s `generateUuid` so its tables get the same v7 IDs as everything else (#29).
+- **`lib/env.ts` is a zod-validated `process.env` singleton** — parsed once, cached, `process.exit(1)` with a readable per-key report on failure. Every other module imports the typed `env` object, never `process.env` directly.
+
+**Alternative considered:** A repository/service layer over Drizzle from the start. Rejected per `CLAUDE.md`'s no-speculative-abstraction rule — there's no second caller yet. The `XxxModelUniqueWhere` types are the one concession: they cost almost nothing now and define the "how do you look this row up" contract that query code will lean on.
+
+**How it solves the problem:** The schema looks like code that already ships in production because it is that code's conventions, and every enum/ID/money decision has a one-line defensible reason rather than a "seemed fine" shrug.
+
+## 29. Primary keys: UUID v7 via Postgres 18's native `uuidv7()`, no separate public-id column
+
+**Problem:** Sequential integer PKs leak information (row counts, creation order) and are enumerable if they ever reach a URL. The usual fix is a separate opaque "public id" column alongside the real PK. Is that needed here?
+
+**Decision:** Every PK is `uuid("id").primaryKey().default(sql\`uuidv7()\`)` — Postgres 18 ships `uuidv7()` as a built-in function, so the database generates a time-ordered UUID with no extension and no app involvement. No separate public-id column: a v7 UUID is already non-guessable, so the PK *is* the safe-to-expose identifier.
+
+**Alternatives considered:**
+
+- **A separate `public_id` / slug column** on top of an internal PK (integer or UUID). This is the right call when the PK must stay internal for a reason that outlives "it's enumerable" — e.g. an integer PK kept for join performance, or a PK shared with an external system. Neither applies here: there's no external system, and a UUID PK is already opaque, so the second column would be pure ceremony — an extra index, an extra thing to keep unique, an extra lookup path — with nothing to protect that the PK doesn't already protect itself.
+- **UUID v4** (`.defaultRandom()`, which is what Ubuntu Stories uses). Fully random, so every insert scatters across the PK's B-tree — index bloat and worse cache locality at scale. v7 keeps the non-guessable property (the random tail) while making the high bits a millisecond timestamp, so inserts stay roughly append-ordered. This is a **deliberate divergence from Ubuntu Stories**, and it's only possible because this repo chose Postgres 18 (#23) where `uuidv7()` is native — Ubuntu Stories predates that.
+- **`gen_random_uuid()` + app-side v7.** The `advanced.database.generateId` hook already routes Better Auth's IDs through `lib/util.ts`'s `uuid` package v7 generator, since Better Auth generates IDs in application code. For our own tables the DB default is simpler and keeps ID generation next to the data.
+
+**How it solves the problem:** Non-enumerable identifiers with no extra column, no extra index, and better insert locality than v4 — bought entirely by the Postgres 18 choice already made.
+
+## 30. Enum wire values: SCREAMING_SNAKE, not lowercase
+
+**Problem:** The enum constants (`DISPUTE_STATUS`, `DISPUTE_REASON`, `USER_ROLE`, `AUTH_EVENT`) need a canonical string form — the value stored in the DB enum, sent on the wire, and matched in code. `docs/api.md` and `docs/domain-model.md` originally sketched them lowercase (`submitted`, `fraudulent_charge`).
+
+**Decision:** SCREAMING_SNAKE (`SUBMITTED`, `FRAUDULENT_CHARGE`, `ADMIN`). Matches Ubuntu Stories' constant convention exactly, so the `pgEnum(...)` calls can take the constant objects directly with no case transform, and a value is visually unambiguous as an enum member wherever it appears (log line, DB row, JSON body). `docs/api.md` and `docs/domain-model.md` are updated to match — they were the stale side.
+
+**Alternative considered:** Lowercase wire values (common in public JSON APIs for aesthetics). Rejected only because it would fork from the prior project's convention for no functional gain and add a mapping layer between the constant object and the `pgEnum`.
+
+**How it solves the problem:** One string form from `shared/src/constant.ts` through the DB enum to the JSON response, no transform anywhere.
+
+## 31. OTP email delivery: nodemailer + Mailpit, wired for real (not a stub)
+
+**Problem:** #21 put email-OTP on the login-critical path and accepted Mailpit as the dev/demo transport. Better Auth's `sendVerificationOTP` callback still needed a real implementation — it was a `console.warn` placeholder.
+
+**Decision:** `nodemailer` (exact-pinned, matching Ubuntu Stories) with a single `lib/mailer.ts` — a transport built from the validated `env` and a `sendEmail({ to, subject, html })` that **logs and swallows failures instead of throwing**, because Better Auth advises against awaiting OTP delivery (timing side-channel) so callers fire-and-forget and a transport error must not surface as a login failure. Email bodies are plain builder functions under `api/src/email/` returning `{ to, subject, html }`; there's one so far (`otp-email-sign-in-request.ts`).
+
+Deviations from Ubuntu Stories, all deliberate: (a) their `middleware/transport.ts` + `lib/mailer.ts` split is collapsed to one file — the split exists there because the transport is also Fastify-decorated, which isn't true here yet; (b) `secure: SMTP_PORT === 465` and auth omitted when `SMTP_USER` is empty, where Ubuntu Stories hardcodes `secure: true` + auth — Mailpit listens plaintext on 1025 and wants no credentials; (c) no email type-registry / template map — YAGNI until the recovery/invite emails in `docs/auth.md` §3 actually land.
+
+The compose Mailpit service is `transaction-dispute-portal-mailpit`, but `api/.env` says `SMTP_HOST=mailpit`, so the dev override gives that service a `mailpit` network alias (the database is reached by its full service name in `DATABASE_URL`; Mailpit gets the short alias instead).
+
+**Alternative considered:** Keep it a stub and document real SMTP only. Rejected — #21 already documents the *production* SMTP requirement; the point of Mailpit is that the demo login flow works end-to-end locally, which needs the callback to actually send.
+
+**How it solves the problem:** Every local login produces a real SMTP message viewable at `localhost:8025`, with the failure mode (transport down) degrading to "no email arrives" rather than "login 500s".
+
+## 32. Compose split: `compose.yml` is the production base, `compose.override.yml` holds the dev deltas
+
+**Problem:** `compose.yml` was a *development* compose — `Dockerfile.dev`, whole-repo bind mounts, `tsx`/`vite` watch, CHOKIDAR polling, Mailpit. Nothing ran the production Dockerfiles (`api/Dockerfile`, `web/Dockerfile`) as a stack. The ask: make `compose.yml` the production compose without breaking the "bare `docker compose up` works on a fresh clone" promise (DoD, README, #15/#20).
+
+**Decision:** Base + auto-merged override.
+
+- `compose.yml` → production shape: `api/Dockerfile` / `web/Dockerfile` via `build:`, `NODE_ENV=production`, `env/production/` + `*.production` env files, no bind mounts, no Mailpit, DB not published. Bundled Postgres stays as a **labeled local-dry-run stand-in** — a real deployment points `DATABASE_URL` at managed Postgres (`docs/scaling-and-resilience.md`).
+- `compose.override.yml` → dev deltas only. Docker Compose auto-merges `compose.override.yml` on any bare `docker compose` command, so `docker compose up` still gives the dev stack with no flags. Production dry-run is the explicit `docker compose -f compose.yml up --build`.
+- `env_file` in the override uses the `!override` YAML tag — Compose *appends* sequence values by default, which would also pull in the (absent) production env files.
+
+New committed env files follow the #20 pattern (every secret-shaped key blank, real values in a gitignored `*.local` sibling): `env/production/.env.database`, `api/.env.production`, `web/.env.production`. `.gitignore` gets three allowlist lines; `.dockerignore` broadened to `.env*` / `*/.env*`.
+
+**Alternative considered:**
+
+- **GHCR `image:` instead of `build:`** for the prod services. Rejected for the dry-run — `build:` is self-contained (DoD line 13), needs no registry auth, and `deploy.yml` already owns the GHCR publish path unchanged. A real deployment runs the GHCR images via the k8s manifests, not this file.
+- **A single compose file with profiles.** Workable, but profiles gate whole services, not per-service field overrides — the dev/prod difference here is mostly *the same services with different build targets and mounts*, which is exactly what the override-file merge is for.
+
+**Gotcha, recorded because it cost time:** base and override MUST set **distinct explicit `image:` names** (`transaction-dispute-portal-api` vs `-api-dev`). Compose derives the image name from project + service, so without explicit names a bare `docker compose up` after a `-f compose.yml build` reuses the *production* image for the dev service and the container crashes on `Cannot find module dist/app.js`. Also: stale pre-existing `*-node_modules` volumes can make the dev container's pnpm self-heal install prod-only deps (`tsx: not found`) — `docker volume rm` the four `*-node_modules` volumes if that surfaces.
+
+**How it solves the problem:** One command each — `docker compose up` for dev (unchanged), `docker compose -f compose.yml up --build` for the production dry-run — from one base file plus a diff.
+
+## 33. Database migrations: a manually-triggered GitHub Actions workflow
+
+**Problem:** #24 built the standalone migration runner (`api/src/database/migrate.ts`) but nothing invoked it in CI/CD. A migration should be a deliberate, auditable action against a chosen environment — not automatic on deploy, and not only runnable from a laptop.
+
+**Decision:** `.github/workflows/migrate.yml` — `workflow_dispatch` with a `staging` / `production` environment choice. `environment: ${{ inputs.environment }}` binds the job to that GitHub Environment, so `production` inherits the same required-reviewer gate as `deploy.yml` (#25) and each environment supplies its own `DATABASE_URL` secret. Steps: checkout → corepack → `setup-node` (`.nvmrc`) → `pnpm install --frozen-lockfile` → `drizzle-kit check` (catches migration/snapshot drift; needs no DB) → a guard that fails with a "add `DATABASE_URL` to this environment's Secrets" message if the secret is unset → `pnpm --filter @transaction-dispute-portal/api migrate`. `concurrency: migrate-<environment>` with `cancel-in-progress: false` queues runs so two never touch one database at once.
+
+No live database exists (`CLAUDE.md`), so the workflow is **dormant** — a dispatch fails fast at the guard with setup instructions until a real `DATABASE_URL` secret is added.
+
+Also tweaked `api/src/database/migrate.ts`: `onnotice: () => {}` on the `postgres()` client, to silence the `schema/relation already exists, skipping` NOTICEs Postgres emits for the migrator's own `CREATE ... IF NOT EXISTS` bootstrap on every re-run — harmless but they read like errors in a CI log.
+
+**Alternative considered:** Run migrations from `deploy.yml` automatically before the app rolls out. Rejected for the same reason #24 decoupled migration from API boot — a schema change should be its own reviewed step with its own approval, not a side effect of shipping code. The runner uses a fresh `pnpm install` rather than the GHCR image, so the migration path and the deployed-artifact path are independent (chosen deliberately).
+
+**How it solves the problem:** A migration is now one button in the Actions UI, gated and audited per environment, ready the moment a database exists.
+
 <!-- Open / unresolved — add an entry above once decided: -->

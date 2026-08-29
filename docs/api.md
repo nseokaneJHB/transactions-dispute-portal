@@ -10,7 +10,7 @@ Every response is `shared`'s `globalResponseSchema` (`shared/src/schema/global.t
 
 - `GET /v1/transactions` — paginated, filterable by date range; scoped to current user
 - `GET /v1/transactions/:id`
-- `POST /v1/disputes` — body: `transactionId`, `reason`, `description`; idempotent — reject with a clear error if the transaction already has an open dispute (`submitted` or `under_review`), and treat a duplicate idempotency key as a no-op rather than a second row. This is the answer to "what happens on a client retry/double-click" and doubles as the one-open-dispute-per-transaction guard.
+- `POST /v1/disputes` — body: `transactionId`, `reason`, `description`; idempotent — reject with a clear error if the transaction already has an open dispute (`SUBMITTED` or `UNDER_REVIEW`), and treat a duplicate idempotency key as a no-op rather than a second row. This is the answer to "what happens on a client retry/double-click" and doubles as the one-open-dispute-per-transaction guard.
 - `GET /v1/disputes` — the historic view: paginated, filterable by status
 - `GET /v1/disputes/:id`
 

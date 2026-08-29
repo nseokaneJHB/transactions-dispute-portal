@@ -2,7 +2,7 @@
 
 Solo submission for an internal promotion evaluation. See `CLAUDE.md` and `docs/brief.md` for full context; `docs/decisions.md` for the "why" behind every non-trivial choice.
 
-**Status: initial scaffold** — `api`, `web`, `shared` are empty-but-runnable skeletons. See `docs/codebase-index.md` for what actually exists on disk.
+**Status: schema + auth wired** — the Drizzle schema, Better Auth (email-OTP), env validation, and OTP email all exist and are verified; no request handlers or UI yet. See `docs/codebase-index.md` for what actually exists on disk.
 
 ## Local setup
 
@@ -26,14 +26,33 @@ Then edit the two new files (both gitignored, never committed):
 Then:
 
 ```sh
-docker-compose up
+docker compose up
 ```
+
+`compose.yml` is the production base; `compose.override.yml` holds the dev deltas and is auto-merged by any bare `docker compose` command, so the line above gives the full dev stack (source bind mounts, `tsx`/`vite` watch, Mailpit) with no flags (`docs/decisions.md` #32).
 
 - Web: http://localhost:3000
 - API: http://localhost:8080
 - Mailpit (caught local email): http://localhost:8025
 
 **Logging in:** login is email-OTP (`docs/decisions.md` #21) — enter an account's email, then check `http://localhost:8025` for the one-time code (the default committed config points SMTP at Mailpit, so nothing is ever really "sent" anywhere outside your own machine unless you filled in real Gmail creds above).
+
+## Production dry-run
+
+`docker compose -f compose.yml up --build` runs the production shape — the real `Dockerfile`s, `NODE_ENV=production`, no source mounts, no Mailpit (`docs/decisions.md` #32). It's a local sanity check of the production images; there's no live deployment target (`CLAUDE.md`).
+
+It needs the gitignored production secret files first (same blank-secret pattern as `docs/decisions.md` #20):
+
+```sh
+cp api/.env.production api/.env.production.local
+cp env/production/.env.database env/production/.env.local.database
+```
+
+Then fill the blank secret-shaped keys in both (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `COOKIE_SECRET`, `SMTP_*`, `POSTGRES_PASSWORD`) — `DATABASE_URL`'s host is the compose service name `transaction-dispute-portal-database`. A real deployment injects these from its orchestrator instead of a file.
+
+## Migrations
+
+`.github/workflows/migrate.yml` applies the committed migrations to a chosen environment (`staging`/`production`), triggered manually from the Actions tab (`docs/decisions.md` #33). `production` waits for the same required-reviewer approval as a deploy. It's dormant until that environment has a real `DATABASE_URL` secret. Locally, `pnpm --filter @transaction-dispute-portal/api migrate` runs the same standalone runner against the dev database.
 
 ## CI/CD
 

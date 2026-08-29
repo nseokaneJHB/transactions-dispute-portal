@@ -2,11 +2,12 @@
 
 ## Entities
 
-- **User** — via Better Auth; `role: customer | admin` (`docs/decisions.md` #16); login is email-OTP for every account, which re-proves email ownership on every login rather than once at signup (`docs/decisions.md` #21, supersedes the old `emailVerified`-gate model)
+- **User** — via Better Auth; `role: CUSTOMER | ADMIN` (`docs/decisions.md` #16); login is email-OTP for every account, which re-proves email ownership on every login rather than once at signup (`docs/decisions.md` #21, supersedes the old `emailVerified`-gate model)
 - **AdminInvite** — email, invite token, expiry, accepted-at; created by an existing admin, consumed once to create a new admin `User` (`docs/decisions.md` #16) — no self-service admin signup
-- **Transaction** — seeded/simulated, belongs to a user, amount in ZAR
-- **Dispute** — belongs to a transaction; status: `submitted → under_review → resolved | rejected`; reason: `fraudulent_charge | duplicate_charge | incorrect_amount | goods_not_received | subscription_not_cancelled | other`
-- **DisputeAuditLog** — one row per status change: who, when, from/to, reason (now includes admin-portal resolutions, `docs/decisions.md` #16)
+- **Transaction** — seeded/simulated, belongs to a user, amount stored as integer ZAR cents (`amount_cents`, `bigint`; `docs/decisions.md` #28)
+- **Dispute** — belongs to a transaction; status: `SUBMITTED → UNDER_REVIEW → RESOLVED | REJECTED`; reason: `FRAUDULENT_CHARGE | DUPLICATE_CHARGE | INCORRECT_AMOUNT | GOODS_NOT_RECEIVED | SUBSCRIPTION_NOT_CANCELLED | OTHER`. Enum values are SCREAMING_SNAKE end to end (`docs/decisions.md` #30). A DB-level partial unique index enforces at most one `SUBMITTED`/`UNDER_REVIEW` dispute per transaction (`docs/decisions.md` #4/#28)
+- **DisputeAuditLog** — one row per status change: actor, when, from/to status, note (now includes admin-portal resolutions, `docs/decisions.md` #16)
+- **AuthAuditLog** — one row per auth event (OTP requested, login success/failure, OTP lockout); keyed by `email` since a failed attempt may not resolve to a user (`docs/decisions.md` #28)
 
 Notifications are events, not a table — triggered on status change, simulated (logged/stubbed, never actually sent).
 
