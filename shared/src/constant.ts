@@ -1,7 +1,42 @@
+export const APP_NAME = "Transactions Dispute Portal" as const;
+
 export const DEFAULT_PAGE_LIMIT = 10 as const;
 export const DEFAULT_PAGE_NUMBER = 1 as const;
 
 export const ORDER_DIRECTION = { asc: "asc", desc: "desc" } as const;
+
+export const USER_ROLE = {
+	ADMIN: "ADMIN",
+	CUSTOMER: "CUSTOMER",
+} as const;
+
+export const DISPUTE_STATUS = {
+	SUBMITTED: "SUBMITTED",
+	UNDER_REVIEW: "UNDER_REVIEW",
+	RESOLVED: "RESOLVED",
+	REJECTED: "REJECTED",
+} as const;
+
+export const DISPUTE_REASON = {
+	FRAUDULENT_CHARGE: "FRAUDULENT_CHARGE",
+	DUPLICATE_CHARGE: "DUPLICATE_CHARGE",
+	INCORRECT_AMOUNT: "INCORRECT_AMOUNT",
+	GOODS_NOT_RECEIVED: "GOODS_NOT_RECEIVED",
+	SUBSCRIPTION_NOT_CANCELLED: "SUBSCRIPTION_NOT_CANCELLED",
+	OTHER: "OTHER",
+} as const;
+
+export const OPEN_DISPUTE_STATUS = [
+	DISPUTE_STATUS.SUBMITTED,
+	DISPUTE_STATUS.UNDER_REVIEW,
+] as const;
+
+export const AUTH_EVENT = {
+	OTP_REQUESTED: "OTP_REQUESTED",
+	LOGIN_SUCCESS: "LOGIN_SUCCESS",
+	LOGIN_FAILURE: "LOGIN_FAILURE",
+	OTP_LOCKED: "OTP_LOCKED",
+} as const;
 
 /**
  * Standard HTTP response code constants.

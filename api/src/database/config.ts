@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
+import { env } from "../lib/env.js";
 import * as schema from "./schema/index.js";
 
 interface GlobalSetup {
@@ -9,34 +10,40 @@ interface GlobalSetup {
 	connection: ReturnType<typeof drizzle>;
 }
 
-// Singleton on globalThis — `tsx watch` hot-reloads this module on every
-// save, and a naive `postgres()` call here would open a fresh connection
-// each reload until the pool is exhausted.
 const global = globalThis as unknown as GlobalSetup;
 
-const connectionString = process.env.DATABASE_URL;
+const isTesting = env.NODE_ENV === "test";
+const isProduction = env.NODE_ENV === "production";
 
-if (!connectionString) {
-	throw new Error("DATABASE_URL is not set");
-}
-
-const isProduction = process.env.NODE_ENV === "production";
-
+/**
+ * Return the process-wide postgres client, creating it on first call.
+ *
+ * @returns A pooled postgres-js client.
+ */
 const createClient = (): ReturnType<typeof postgres> =>
 	global.client ??
-	postgres(connectionString, {
+	postgres(env.DATABASE_URL, {
 		prepare: false,
 		idle_timeout: 30,
 		connect_timeout: 10,
 		max: isProduction ? 10 : 1,
 	});
 
+/**
+ * Build the client plus its Drizzle connection and a matching close handler.
+ *
+ * @returns The client, the Drizzle connection, and a close function.
+ */
 const initializeDatabase = (): GlobalSetup => {
 	const client = createClient();
 	return {
 		client,
 		close: async () => await client.end(),
-		connection: drizzle(client, { schema }),
+		connection: drizzle(client, {
+			schema,
+			casing: "snake_case",
+			logger: !isProduction && !isTesting,
+		}),
 	};
 };
 
