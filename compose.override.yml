@@ -1,0 +1,78 @@
+services:
+  transaction-dispute-portal-database:
+    env_file: !override
+      - ./env/development/.env.database
+      - path: ./env/development/.env.local.database
+        required: false
+
+    ports:
+      - "5432:5432"
+
+  transaction-dispute-portal-api:
+    image: transaction-dispute-portal-api-dev
+    build:
+      context: .
+      dockerfile: api/Dockerfile.dev
+
+    env_file: !override
+      - ./api/.env
+      - path: ./api/.env.local
+        required: false
+
+    working_dir: /workspace
+
+    volumes:
+      - .:/workspace
+      - transaction-dispute-portal-node_modules:/workspace/node_modules
+      - transaction-dispute-portal-api-node_modules:/workspace/api/node_modules
+      - transaction-dispute-portal-shared-node_modules:/workspace/shared/node_modules
+
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "100"
+
+    healthcheck:
+      start_period: 90s
+
+  transaction-dispute-portal-web:
+    image: transaction-dispute-portal-web-dev
+    build:
+      context: .
+      dockerfile: web/Dockerfile.dev
+
+    env_file: !override
+      - ./web/.env
+
+    working_dir: /workspace
+
+    volumes:
+      - .:/workspace
+      - transaction-dispute-portal-node_modules:/workspace/node_modules
+      - transaction-dispute-portal-web-node_modules:/workspace/web/node_modules
+      - transaction-dispute-portal-shared-node_modules:/workspace/shared/node_modules
+
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "100"
+
+    healthcheck:
+      start_period: 90s
+
+  transaction-dispute-portal-mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+    networks:
+      transaction-dispute-portal:
+        aliases:
+          - mailpit
+
+volumes:
+  transaction-dispute-portal-node_modules:
+  transaction-dispute-portal-api-node_modules:
+  transaction-dispute-portal-web-node_modules:
+  transaction-dispute-portal-shared-node_modules:

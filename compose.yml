@@ -1,20 +1,12 @@
-# =========================
-# DATABASE
-# =========================
 services:
   transaction-dispute-portal-database:
     image: postgres:18-alpine
     restart: unless-stopped
 
     env_file:
-      - ./env/${ENV:-development}/.env.database
-      # Optional local-only override — real POSTGRES_PASSWORD, gitignored,
-      # never committed. See README.md "Local setup" / docs/decisions.md #20.
-      - path: ./env/${ENV:-development}/.env.local.database
+      - ./env/production/.env.database
+      - path: ./env/production/.env.local.database
         required: false
-
-    ports:
-      - "5432:5432"
 
     volumes:
       - transaction-dispute-portal-postgres_data:/var/lib/postgresql
@@ -28,37 +20,17 @@ services:
     networks:
       - transaction-dispute-portal
 
-  # =========================
-  # MAILPIT (local SMTP catcher — see docs/auth.md #3)
-  # =========================
-  transaction-dispute-portal-mailpit:
-    image: axllent/mailpit:latest
-    restart: unless-stopped
-
-    ports:
-      - "8025:8025" # Web UI — view caught emails at http://localhost:8025
-      - "1025:1025" # SMTP — api's SMTP_HOST=mailpit points here
-
-    networks:
-      - transaction-dispute-portal
-
-  # =========================
-  # BACKEND API
-  # =========================
   transaction-dispute-portal-api:
+    image: transaction-dispute-portal-api
     build:
       context: .
-      dockerfile: api/Dockerfile.dev
+      dockerfile: api/Dockerfile
 
     restart: unless-stopped
 
     env_file:
-      - ./api/.env
-      # Optional local-only override (docs/decisions.md #19) — real SMTP
-      # creds for testing against a real inbox, gitignored, never
-      # committed. `required: false` means compose just skips it when the
-      # file doesn't exist, no manual setup needed for a fresh clone.
-      - path: ./api/.env.local
+      - ./api/.env.production
+      - path: ./api/.env.production.local
         required: false
 
     ports:
@@ -68,50 +40,30 @@ services:
       transaction-dispute-portal-database:
         condition: service_healthy
 
-    working_dir: /workspace
-
-    volumes:
-      - .:/workspace
-      - transaction-dispute-portal-node_modules:/workspace/node_modules
-      - transaction-dispute-portal-api-node_modules:/workspace/api/node_modules
-      - transaction-dispute-portal-shared-node_modules:/workspace/shared/node_modules
-
-    environment:
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "100"
-
     healthcheck:
       test:
         [
           "CMD-SHELL",
           'node -e "fetch(''http://localhost:8080/healthz'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
         ]
-      interval: 5s
+      interval: 10s
       timeout: 3s
       retries: 3
-      # 90s, not 10s: on a first-ever `docker-compose up`, the named
-      # node_modules volumes start empty, so pnpm self-heals with a full
-      # reinstall (~20-30s) before `tsx watch` can even start. A short
-      # start_period here marks the container unhealthy before it's had a
-      # real chance to boot — hit this exact failure while verifying the
-      # stack after adding the committed dev env files (docs/decisions.md #15).
-      start_period: 90s
+      start_period: 15s
 
     networks:
       - transaction-dispute-portal
 
-  # =========================
-  # FRONTEND WEB
-  # =========================
   transaction-dispute-portal-web:
+    image: transaction-dispute-portal-web
     build:
       context: .
-      dockerfile: web/Dockerfile.dev
+      dockerfile: web/Dockerfile
 
     restart: unless-stopped
 
     env_file:
-      - ./web/.env
+      - ./web/.env.production
 
     ports:
       - "3000:3000"
@@ -120,27 +72,22 @@ services:
       transaction-dispute-portal-api:
         condition: service_healthy
 
-    working_dir: /workspace
-
-    volumes:
-      - .:/workspace
-      - transaction-dispute-portal-node_modules:/workspace/node_modules
-      - transaction-dispute-portal-web-node_modules:/workspace/web/node_modules
-      - transaction-dispute-portal-shared-node_modules:/workspace/shared/node_modules
-
-    environment:
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "100"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://localhost:3000/'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
 
     networks:
       - transaction-dispute-portal
 
 volumes:
   transaction-dispute-portal-postgres_data:
-  transaction-dispute-portal-node_modules:
-  transaction-dispute-portal-api-node_modules:
-  transaction-dispute-portal-web-node_modules:
-  transaction-dispute-portal-shared-node_modules:
 
 networks:
   transaction-dispute-portal:
