@@ -4,9 +4,7 @@ services:
     restart: unless-stopped
 
     env_file:
-      - ./env/production/.env.database
-      - path: ./env/production/.env.local.database
-        required: false
+      - ./env/.env.database
 
     volumes:
       - transaction-dispute-portal-postgres_data:/var/lib/postgresql
@@ -29,9 +27,7 @@ services:
     restart: unless-stopped
 
     env_file:
-      - ./api/.env.production
-      - path: ./api/.env.production.local
-        required: false
+      - ./api/.env
 
     ports:
       - "8080:8080"
@@ -63,7 +59,7 @@ services:
     restart: unless-stopped
 
     env_file:
-      - ./web/.env.production
+      - ./web/.env
 
     ports:
       - "3000:3000"

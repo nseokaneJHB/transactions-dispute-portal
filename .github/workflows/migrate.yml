@@ -2,25 +2,16 @@ name: Migrate
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Target environment — its DATABASE_URL secret is migrated
-        type: choice
-        required: true
-        default: staging
-        options:
-          - staging
-          - production
 
 concurrency:
-  group: migrate-${{ github.event.inputs.environment }}
+  group: migrate-staging
   cancel-in-progress: false
 
 jobs:
   migrate:
-    name: Run migrations (${{ github.event.inputs.environment }})
+    name: Run migrations (staging)
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment }}
+    environment: staging
     permissions:
       contents: read
     env:
@@ -45,8 +36,8 @@ jobs:
       - name: Require a DATABASE_URL secret
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::error::No DATABASE_URL secret on the '${{ github.event.inputs.environment }}' environment."
-            echo "Add it under repo Settings -> Environments -> ${{ github.event.inputs.environment }} -> Secrets, then re-run."
+            echo "::error::No DATABASE_URL secret on the 'staging' environment."
+            echo "Add it under repo Settings -> Environments -> staging -> Secrets, then re-run."
             exit 1
           fi
 

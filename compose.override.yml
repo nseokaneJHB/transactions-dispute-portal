@@ -1,10 +1,5 @@
 services:
   transaction-dispute-portal-database:
-    env_file: !override
-      - ./env/development/.env.database
-      - path: ./env/development/.env.local.database
-        required: false
-
     ports:
       - "5432:5432"
 
@@ -13,11 +8,6 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile.dev
-
-    env_file: !override
-      - ./api/.env
-      - path: ./api/.env.local
-        required: false
 
     working_dir: /workspace
 
@@ -39,9 +29,6 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile.dev
-
-    env_file: !override
-      - ./web/.env
 
     working_dir: /workspace
 

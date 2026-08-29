@@ -31,11 +31,7 @@ coverage
 .DS_Store
 Thumbs.db
 
-# Environment files — none of these belong in a build context. The images
-# get their config at runtime, not bake time; the `.local` / `.production`
-# variants also hold real secrets (docs/decisions.md #19, #20). The `.env*`
-# globs cover every variant: .env, .env.local, .env.production,
-# .env.production.local, env/production/.env.database, etc.
+# Environment files — provided at runtime by compose, never baked into an image
 .env*
 */.env*
 env/**/.env*
