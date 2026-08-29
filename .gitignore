@@ -23,22 +23,10 @@ logs/
 *.log
 npm-debug.log*
 
-# Environment files
-.env
-.env.*
-env/**/.env*
-
-# Exception: these are the committed env files (see docs/decisions.md #15,
-# #20). Every secret-shaped value in them is blank; the non-secret values
-# grant no access outside your own local docker-compose stack. Real values
-# live only in the gitignored `*.local` counterparts. Any .env file NOT in
-# this allowlist stays gitignored.
-!api/.env
-!web/.env
-!env/development/.env.database
-!api/.env.production
-!web/.env.production
-!env/production/.env.database
+# Environment files (committed with working local values — docs/decisions.md #34; only per-developer overrides ignored)
+*.env.local
+.env.local
+*/.env.local
 
 # OS generated files
 .DS_Store
