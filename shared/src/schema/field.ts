@@ -42,6 +42,7 @@ export const emailSchema = z
 	.email("Invalid email address")
 	.max(255, "Email must not exceed 255 characters")
 	.trim()
+	.toLowerCase()
 	.describe("Email address");
 
 export const orderDirectionSchema = z

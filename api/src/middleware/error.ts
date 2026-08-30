@@ -9,8 +9,8 @@ import {
 
 /**
  * Central error handler. Maps the error classes we expect — schema validation,
- * Better Auth API errors — onto the shared response envelope, and falls back to
- * a logged `500` for anything unrecognized.
+ * Better Auth API errors, `@fastify/rate-limit`'s 429 — onto the shared response
+ * envelope, and falls back to a logged `500` for anything unrecognized.
  */
 export const error = async (
 	error: FastifyError,
@@ -31,11 +31,18 @@ export const error = async (
 		return reply.status(status).send(response);
 	}
 
+	if (error.statusCode === 429) {
+		const { status, code } = HTTP_RESPONSE_CODE.TOO_MANY_REQUESTS;
+		const response: GlobalResponse = {
+			code,
+			message: "Too many requests. Please slow down and try again shortly.",
+		};
+
+		return reply.status(status).send(response);
+	}
+
 	if (error instanceof APIError) {
-		const { status, code } =
-			error.statusCode === 429
-				? HTTP_RESPONSE_CODE.TOO_MANY_REQUESTS
-				: HTTP_RESPONSE_CODE.BAD_REQUEST;
+		const { status, code } = HTTP_RESPONSE_CODE.BAD_REQUEST;
 		const response: GlobalResponse = {
 			code,
 			message: error.message,

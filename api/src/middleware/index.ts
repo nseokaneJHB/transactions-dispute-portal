@@ -6,6 +6,7 @@ import {
 } from "fastify-type-provider-zod";
 
 import { error } from "./error.js";
+import { notFound } from "./not-found.js";
 import { authorize } from "./authorize.js";
 import { authenticate } from "./authenticate.js";
 import { onRequestTimerHook, onResponseLoggingHook } from "./logging.js";
@@ -61,6 +62,7 @@ export const middlewares = async (app: FastifyInstance): Promise<void> => {
 	});
 
 	app.setErrorHandler(error);
+	app.setNotFoundHandler(notFound);
 	app.setValidatorCompiler(validatorCompiler);
 	app.setSerializerCompiler(serializerCompiler);
 

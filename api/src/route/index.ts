@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { API_URLS } from "@transaction-dispute-portal/shared";
 
 import { route as healthRoute } from "../modules/check/route.js";
+import { route as authRoute } from "../modules/authentication/route.js";
 
 import { env } from "../lib/env.js";
 
@@ -11,7 +12,8 @@ import { env } from "../lib/env.js";
  * unversioned (`docs/decisions.md` #18); versioned modules land under `/v1`.
  */
 export const route = async (app: FastifyInstance): Promise<void> => {
-	const { HEALTH } = API_URLS(env.API_VERSION);
+	const { HEALTH, AUTH } = API_URLS(env.API_VERSION);
 
 	await app.register(healthRoute, { prefix: HEALTH });
+	await app.register(authRoute, { prefix: AUTH });
 };
