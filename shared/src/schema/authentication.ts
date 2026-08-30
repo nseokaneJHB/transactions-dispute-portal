@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { OTP } from "../constant.js";
+
 import { emailSchema, stringSchema } from "./field.js";
 
 /**
@@ -15,6 +17,9 @@ export const authOtpRequestBodySchema = z.object({
 export const authOtpVerifyBodySchema = z.object({
 	email: emailSchema,
 	otp: stringSchema
-		.regex(/^\d{6}$/, "The sign-in code is 6 digits.")
-		.describe("The 6-digit code from the sign-in email"),
+		.regex(
+			new RegExp(`^\\d{${OTP.LENGTH}}$`),
+			`The sign-in code is ${OTP.LENGTH} digits.`,
+		)
+		.describe(`The ${OTP.LENGTH}-digit code from the sign-in email`),
 });

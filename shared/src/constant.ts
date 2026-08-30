@@ -5,6 +5,12 @@ export const DEFAULT_PAGE_NUMBER = 1 as const;
 
 export const ORDER_DIRECTION = { asc: "asc", desc: "desc" } as const;
 
+export const OTP = {
+	LENGTH: 6,
+	EXPIRY_MINUTES: 10,
+	MAX_ATTEMPTS: 5,
+} as const;
+
 export const USER_ROLE = {
 	ADMIN: "ADMIN",
 	CUSTOMER: "CUSTOMER",

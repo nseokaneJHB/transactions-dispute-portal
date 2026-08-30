@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import {
+	OTP,
 	AUTH_EVENT,
 	FRONTEND_URLS,
 	HTTP_RESPONSE_CODE,
@@ -54,7 +55,7 @@ export const requestOtp = async (
 	const { status, code } = HTTP_RESPONSE_CODE.OK;
 	return reply.status(status).send({
 		code,
-		message: `If an account exists for ${email}, a sign-in code is on its way. It expires in 10 minutes.`,
+		message: `If an account exists for ${email}, a sign-in code is on its way. It expires in ${OTP.EXPIRY_MINUTES} minutes.`,
 		redirectUrl: signInRedirect(email),
 	});
 };

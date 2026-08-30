@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 
 import {
+	USER_ROLE,
 	FRONTEND_URLS,
 	HTTP_RESPONSE_CODE,
 	type Role,
@@ -43,7 +44,7 @@ export const authenticate = async (
 		name: user.name ?? null,
 		email: user.email,
 		image: user.image ?? null,
-		role: (user.role as Role) ?? "CUSTOMER",
+		role: (user.role as Role) ?? USER_ROLE.CUSTOMER,
 		email_verified: user.emailVerified,
 		created_at: user.createdAt,
 		updated_at: user.updatedAt,
