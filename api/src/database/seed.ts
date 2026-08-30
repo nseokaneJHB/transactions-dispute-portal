@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
+import { subMonths } from "date-fns";
+
 import { faker } from "@faker-js/faker";
 
 import {
@@ -161,8 +163,7 @@ const seed = async (): Promise<void> => {
 	const database = drizzle(client, { casing: "snake_case" });
 
 	const now = new Date();
-	const earliestTransaction = new Date(now);
-	earliestTransaction.setMonth(earliestTransaction.getMonth() - 14);
+	const earliestTransaction = subMonths(now, 14);
 
 	try {
 		await database.execute(sql`
