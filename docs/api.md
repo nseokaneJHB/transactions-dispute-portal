@@ -6,6 +6,14 @@ Sketch — refine, don't reinvent. All routes below versioned under `/v1/` (`doc
 
 Every response is `shared`'s `globalResponseSchema` (`shared/src/schema/global.ts` — `docs/decisions.md` #22): `{ code, message, redirectUrl?, errors? }`, `code` one of `HTTP_CODE` (`shared/src/constant.ts`). Endpoints that return a payload extend it per-endpoint with `data`, e.g. `globalResponseSchema.extend({ data: disputeSchema })` — not every response needs one (a bare `204`/redirect is valid as the base envelope alone). List endpoints use `paginatedGlobalResponseSchema` instead (adds `count`/`total`/`page`/`limit`), extended with `data` the same way. Validation failures populate `errors: [{ field, message }]`.
 
+## Auth (email-OTP login — `docs/decisions.md` #21/#37)
+
+Our own routes wrapping the Better Auth server API, so login carries the shared envelope, an `auth_audit_log` trail, and its own per-route rate limit (`docs/decisions.md` #37).
+
+- `POST /v1/auth/otp` — body: `email`. Sends a one-time code. Response is identical whether or not the account exists (no user probing). Writes `OTP_REQUESTED`.
+- `POST /v1/auth/otp/verify` — body: `email`, `otp`. Exchanges the code for a session; forwards `Set-Cookie`. Writes `LOGIN_SUCCESS` / `LOGIN_FAILURE` / `OTP_LOCKED`.
+- `POST /v1/auth/sign-out` — ends the session; safe to call without one.
+
 ## Public, customer-authenticated (Better Auth session — email-OTP login, `docs/decisions.md` #21)
 
 - `GET /v1/transactions` — paginated, filterable by date range; scoped to current user
