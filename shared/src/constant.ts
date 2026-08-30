@@ -2,6 +2,7 @@ export const APP_NAME = "Transactions Dispute Portal" as const;
 
 export const DEFAULT_PAGE_LIMIT = 10 as const;
 export const DEFAULT_PAGE_NUMBER = 1 as const;
+export const MAX_PAGE_LIMIT = 100 as const;
 
 export const ORDER_DIRECTION = { asc: "asc", desc: "desc" } as const;
 
