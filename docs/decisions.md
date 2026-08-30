@@ -433,4 +433,58 @@ _Revised by decision 34:_ staging-only — the `staging`/`production` environmen
 
 _Known wart:_ the staging-only `docker compose -f compose.yml up` inherits `SMTP_HOST=mailpit` from `api/.env` but has no Mailpit service (that's dev-override only), so OTP sends fail there — silently, since `sendEmail` swallows transport errors (#31). Fine for a staging image sanity-check; a real deployment sets real SMTP.
 
+## 35. API skeleton: mirror the Ubuntu Stories request stack, with the over-builds named and trimmed
+
+**Problem:** `docs/api.md` had a route sketch and `shared` had the response envelope (#22), but nothing on disk turned a request into a response — no app factory, no plugin registration, no module structure, no error/auth wiring. Same fork as #28: invent a fresh request stack for this repo, or reuse the one from a project already in production (Ubuntu Stories).
+
+**Decision:** Reuse the Ubuntu Stories structure, for the same reason as #28 — "consistent with a codebase already shipping" beats a bespoke shape invented for a one-month submission. Concretely:
+
+- **`build()` factory split from `app.ts`.** `src/build.ts` wires plugins + routes and returns the app short of `listen()` (so tests get an app with no open port); `src/app.ts` calls `build(logger)`, attaches `close-with-grace`, and listens. `app.ts` never imports the migration runner (#24).
+- **`middleware/index.ts` registers every cross-cutting concern in one place** — helmet, CORS, `@fastify/rate-limit` (global), `@fastify/cookie`, the zod validator/serializer compilers, the error handler, the not-found handler, the request-timing / structured-logging hooks, and the `authenticate` / `authorize` / `connection` decorators.
+- **`modules/<name>/{route,service,type}.ts` triad.** `route.ts` declares method + URL (from `shared`'s `API_PATHS`) + zod schema + `preHandler` chain; `service.ts` is the handler; `type.ts` is the `RouteGenericInterface`. `route/index.ts` mounts each module under its namespace prefix, resolved from `shared`'s `API_URLS(env.API_VERSION)` so the `/v1` prefix lives in exactly one place.
+- **`type/fastify.ts`** declares the `FastifyInstance` / `FastifyRequest` augmentation (`authenticate`, `authorize`, `connection`, `request.user`, `request.session`).
+
+Deliberate trims vs. Ubuntu Stories, each because the panel reads this repo against `CLAUDE.md`'s own no-speculative-abstraction rule, not against a codebase they can't see (full blow-by-blow in `docs/overkill-implementation.md`, enhancement follow-ups in `docs/enhance-suggestion.md`):
+
+- **No generic query DSL / repository-over-the-ORM** — deleted outright; per-module hand-written Drizzle instead (#36).
+- **No event middleware** — dropped `EVENT_NAMES`, the `X-Event-Name` header, `request.eventName`, `app.event(...)` in `preHandler`. Routes declare handler + schema only.
+- **One correlation id, not two** — `genReqId` seeds Fastify's own request id from `x-correlation-id` / `x-request-id`, logged as `correlationId` and echoed on every response. No parallel second id.
+- **No custom Pino levels** — Ubuntu Stories redefined the level set to identical values; removed, along with the now-empty `lib/constant.ts` and `type/global.ts`.
+- **Flat `readyz`** — `ready` / `503` with a 2s timeout on the `select 1` probe, not a three-state per-subsystem health model (also closes `docs/enhance-suggestion.md` #7).
+- **Better Auth's own rate limiter off** — the global `@fastify/rate-limit` plus per-route caps (#37) cover its endpoints; two limiters was two things to reason about.
+
+**Alternatives considered:** Invent a fresh request stack — rejected, same reasoning as #28. Land the skeleton as-was, DSL and all, and trim later — rejected: the DSL is the exact "repository layer with no second caller" the conventions rule names, and shipping it then removing it wastes the reviewer's attention on machinery that never earned its place.
+
+**How it solves the problem:** A request stack that looks like production code because it is that code's structure, minus the parts that only make sense at Ubuntu Stories' size — and every subtraction is written down where a "why is this different from your other project" question can find it.
+
+## 36. Data access: per-table hand-written Drizzle functions taking an `Executor`, not a query builder
+
+**Problem:** #35 deleted Ubuntu Stories' generic `core` query DSL (`server.core.story.many({ where, select, order, page, ... })`). Query code still needs *somewhere* to live — inline in each service, or a thin seam of its own.
+
+**Decision:** `api/src/database/repository/<table>.ts` — one file per table, each exporting plain arrow functions that write the Drizzle query by hand (`recordAuthEvent(executor, record)`), re-exported from `repository/index.ts`. Every function takes an `Executor` as its first argument — `database/executor.ts` types it as `typeof connection | Transaction`, i.e. the pooled connection or an open transaction handle — so the *caller* decides transaction scope and the same function works inside or outside one. Modules import from `repository/`, never from each other.
+
+**Alternatives considered:** Keep the generic DSL — rejected (#35): an ORM over the ORM with, at deletion time, zero real callers. Inline Drizzle directly in each `service.ts` — rejected: `CLAUDE.md` wants query/type logic centralized rather than scattered per-route, and a named repository function is the seam an integration test can point at a rolled-back transaction. A full repository *class* / DI container — rejected per the no-speculative-abstraction rule; these are just functions.
+
+**How it solves the problem:** The query layer is a flat list of named functions a reader can scan in one pass, with transaction control pushed to the caller via the `Executor` parameter — the one piece of structure that pays for itself immediately (the auth module already opens no transaction; the dispute module will).
+
+## 37. Auth module: wrap Better Auth's server API in our own routes, don't mount its HTTP handler
+
+**Problem:** Better Auth ships a catch-all handler you can mount at `/v1/auth/*` and be done. But then login responses wouldn't match `shared`'s envelope (#22), there'd be no `auth_audit_log` trail (`docs/domain-model.md`), and Better Auth's built-in rate limiting would be the login-abuse story instead of one we chose.
+
+**Decision:** `modules/authentication/` defines three explicit routes — `POST /v1/auth/otp`, `POST /v1/auth/otp/verify`, `POST /v1/auth/sign-out` — whose services call `auth.api.*` through `lib/authentication.ts` and then own the rest: shape the result into the `shared` envelope, forward Better Auth's `Set-Cookie` headers verbatim, write an `AUTH_EVENT` row via `repository/auth-audit-log.ts` (`OTP_REQUESTED` on request; `LOGIN_SUCCESS` with `user_id` / `LOGIN_FAILURE` / `OTP_LOCKED` on verify, distinguished by inspecting Better Auth's response), and carry a per-route rate limit derived from `shared`'s `OTP` constant (`MAX_ATTEMPTS`/min on request; `2 × MAX_ATTEMPTS`/min on verify, loose enough that Better Auth's own 5-attempts-per-code lockout is what a fat-fingering user hits, not a 429). `/v1/auth/otp` responds identically whether or not the account exists — no user-probing. `emailAndPassword` is off; Better Auth's own rate limiter is off (#35).
+
+**Alternatives considered:** Mount Better Auth's handler as-is — rejected for the three gaps above (envelope, audit trail, rate-limit ownership). Put the audit-log write inside `lib/authentication.ts` rather than the service — rejected: the service already has `request.ip` / `user-agent` / the parsed Better Auth response in hand, and `lib/` shouldn't reach for the repository.
+
+**How it solves the problem:** Login, verify, and sign-out return the same envelope as every other endpoint, every attempt lands in `auth_audit_log` keyed by email (#28), and the rate-limit story is one we can point at and explain — at the cost of ~140 lines of service code wrapping calls Better Auth would otherwise handle itself. Verified end to end against Postgres + Mailpit (see the commit message for the exact trace).
+
+## 38. Dates: `date-fns`
+
+**Problem:** Date math was about to start (seed spread over months; dispute-resolve timestamps; `from`/`to` range filters) with raw `Date` mutation (`d.setMonth(d.getMonth() - 14)`) as the default.
+
+**Decision:** `date-fns` is the date library from here. It operates on native `Date` — exactly what Drizzle's `timestamp` columns and `faker.date.*` already return — so there's no wrapper type at the DB boundary (unlike luxon's `DateTime`); it's function-based and tree-shakeable, matching the repo's arrow-function style. `new Date()` for "now" stays fine. First use: `subMonths(now, 14)` in the seed.
+
+**Alternatives considered:** luxon — richer, but its `DateTime` wrapper means converting at every DB read/write. Raw `Date` mutation — error-prone and the thing this decision exists to stop. dayjs — smaller, but mutable-by-default plugins and a less explicit API.
+
+**How it solves the problem:** One immutable, native-`Date`-in/out helper set for every date operation, no boundary conversions.
+
 <!-- Open / unresolved — add an entry above once decided: -->
