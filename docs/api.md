@@ -16,8 +16,10 @@ Our own routes wrapping the Better Auth server API, so login carries the shared 
 
 ## Public, customer-authenticated (Better Auth session — email-OTP login, `docs/decisions.md` #21)
 
-- `GET /v1/transactions` — paginated, filterable by date range; scoped to current user
-- `GET /v1/transactions/:id`
+Every route here is gated `authenticate` + `authorize(CUSTOMER)` — an `ADMIN` session gets `403`, not another view of the data.
+
+- `GET /v1/transactions` — **built.** A page of the caller's own transactions, ordered on `transacted_at`. Query: `from` / `to` (`YYYY-MM-DD`, inclusive, `from ≤ to`), `order` (`asc` / `desc`, default `desc`), `page`, `limit` (≤ 100). `paginatedGlobalResponseSchema` + `data: transaction[]` — `count` is the full match total, `total` the page size.
+- `GET /v1/transactions/:transactionId` — **built.** One transaction, **only if it belongs to the caller** — another user's row (or a well-formed id that doesn't exist) is a `404`, never a `403`, so ownership can't be probed (`docs/decisions.md` #39). A malformed id is a `422` (UUID params schema).
 - `POST /v1/disputes` — body: `transactionId`, `reason`, `description`; idempotent — reject with a clear error if the transaction already has an open dispute (`SUBMITTED` or `UNDER_REVIEW`), and treat a duplicate idempotency key as a no-op rather than a second row. This is the answer to "what happens on a client retry/double-click" and doubles as the one-open-dispute-per-transaction guard.
 - `GET /v1/disputes` — the historic view: paginated, filterable by status
 - `GET /v1/disputes/:id`

@@ -2,7 +2,7 @@
 
 Solo submission for an internal promotion evaluation. See `CLAUDE.md` and `docs/brief.md` for full context; `docs/decisions.md` for the "why" behind every non-trivial choice.
 
-**Status: request stack + auth module wired** — the Drizzle schema, Better Auth (email-OTP), env validation, OTP email, the Fastify request stack (`build()`/`app.ts` split, middleware layer, module triad; `docs/decisions.md` #35), the `check` and `authentication` modules, and deterministic seed/purge scripts all exist and are verified. Still to come: the `transactions` / `disputes` / `admin` modules, Vitest tests, and the `web` UI. See `docs/codebase-index.md` for what actually exists on disk.
+**Status: request stack + `auth` / `transaction` modules wired** — the Drizzle schema, Better Auth (email-OTP), env validation, OTP email, the Fastify request stack (`build()`/`app.ts` split, middleware layer, module triad; `docs/decisions.md` #35), the `check` / `authentication` / `transaction` modules, and deterministic seed/purge scripts all exist and are verified. Still to come: the `disputes` and `admin` modules, Vitest tests, and the `web` UI. See `docs/codebase-index.md` for what actually exists on disk.
 
 ## Local setup
 

@@ -487,4 +487,18 @@ Deliberate trims vs. Ubuntu Stories, each because the panel reads this repo agai
 
 **How it solves the problem:** One immutable, native-`Date`-in/out helper set for every date operation, no boundary conversions.
 
+## 39. Customer data scoping: the owner filter is in the query, and a miss is a 404 not a 403
+
+**Problem:** `docs/domain-model.md`'s authz NFR — "a customer only ever reads/acts on their own transactions and disputes" — needs a concrete shape in the first module that reads customer data (`transactions`). Two sub-questions: where does the ownership check live, and what does a cross-owner request return?
+
+**Decision:**
+
+- **The `user_id = :caller` predicate is part of every customer query itself**, not a separate `if (row.user_id !== user.id)` check after a fetch. `findUserTransactionById(executor, { id, userId })` filters on both columns; `findTransactionsByUser` filters on `user_id` before paginating. There is no code path that loads a row and *then* decides whether the caller may see it — the database never returns another user's row in the first place.
+- **A row that exists but isn't the caller's returns `404`, identical to a row that doesn't exist** — never `403`. A `403` on someone else's id confirms that id is real; a uniform `404` leaks nothing. (A malformed id is a `422` from the UUID params schema — a different class, a client error in the request itself.)
+- **Route-level `authorize(CUSTOMER)`** on top: an `ADMIN` session on a `/v1/transactions*` route is a `403`. The admin surface is its own namespace (`docs/decisions.md` #16); the customer API is not a second way in for an admin.
+
+**Alternatives considered:** Fetch-then-check ownership in the service — rejected: it works, but it puts a row the caller may not see into application memory and makes the guard a thing every handler must remember rather than a property of the query. `403` for a cross-owner request — rejected: it's the "correct" status in the abstract, but it's also an existence oracle for enumerable-looking ids; the DoD's own wording ("can't read another user's data") is about non-disclosure, and `404` discloses less.
+
+**How it solves the problem:** The authz guarantee is enforced one layer down from the handler — in the `repository/` query — so a new customer endpoint gets it by using the scoped repository function, not by re-implementing a check. And the response shape gives an attacker with a stolen id no signal about whether it's valid.
+
 <!-- Open / unresolved — add an entry above once decided: -->
