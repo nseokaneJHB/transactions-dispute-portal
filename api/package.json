@@ -23,6 +23,7 @@
 		"@transaction-dispute-portal/shared": "workspace:*",
 		"better-auth": "1.7.2",
 		"close-with-grace": "2.5.0",
+		"date-fns": "4.1.0",
 		"drizzle-orm": "0.45.2",
 		"fastify": "5.8.5",
 		"fastify-type-provider-zod": "6.1.0",
