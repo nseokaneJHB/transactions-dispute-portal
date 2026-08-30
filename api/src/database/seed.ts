@@ -110,10 +110,7 @@ const RESOLUTION_NOTES: Record<DisputeStatus, string[]> = {
 
 const pick = <T>(values: readonly T[]): T => faker.helpers.arrayElement(values);
 
-/**
- * A plausible ZAR amount in cents — mostly everyday spend, occasionally a large
- * purchase so the data has a realistic spread.
- */
+/** A plausible ZAR amount in cents. */
 const randomAmountCents = (): number =>
 	faker.datatype.boolean(0.1)
 		? faker.number.int({ min: 300_000, max: 2_500_000 })
@@ -127,10 +124,7 @@ const randomDisputeStatus = (): DisputeStatus =>
 		{ weight: 20, value: DISPUTE_STATUS.REJECTED },
 	]);
 
-/**
- * A first-person dispute description keyed to its reason, so the seeded rows
- * read like something a customer actually wrote.
- */
+/** A first-person dispute description for the given reason. */
 const describeDispute = (reason: DisputeReason, merchant: string): string => {
 	switch (reason) {
 		case DISPUTE_REASON.FRAUDULENT_CHARGE:

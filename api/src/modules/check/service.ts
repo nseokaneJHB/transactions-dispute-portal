@@ -14,9 +14,7 @@ import type { HealthzRequest, ReadyzRequest } from "./type.js";
 
 const DATABASE_PROBE_TIMEOUT_MS = 2000;
 
-/**
- * Liveness probe: confirms the process is up and not draining. Cheap — no I/O.
- */
+/** Liveness probe — the process is up and not draining. */
 export const healthz = async (
 	_request: FastifyRequest<HealthzRequest>,
 	reply: FastifyReply<HealthzRequest>,
@@ -38,12 +36,7 @@ export const healthz = async (
 	});
 };
 
-/**
- * Readiness probe: ready (`200`) only when the process is not draining and the
- * database answers `select 1` within the probe budget; otherwise `503`. The
- * probe distinguishes only ready from not-ready, so the body stays flat —
- * slow-but-alive is a metrics concern, not a probe state.
- */
+/** Readiness probe — `200` only if not draining and the database answers in time. */
 export const readyz = async (
 	request: FastifyRequest<ReadyzRequest>,
 	reply: FastifyReply<ReadyzRequest>,

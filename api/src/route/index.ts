@@ -7,10 +7,7 @@ import { route as authRoute } from "../modules/authentication/route.js";
 
 import { env } from "../lib/env.js";
 
-/**
- * Mount every route module under its namespace prefix. Health checks stay
- * unversioned (`docs/decisions.md` #18); versioned modules land under `/v1`.
- */
+/** Mount every route module under its namespace prefix. */
 export const route = async (app: FastifyInstance): Promise<void> => {
 	const { HEALTH, AUTH } = API_URLS(env.API_VERSION);
 

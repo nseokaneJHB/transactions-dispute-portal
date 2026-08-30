@@ -5,8 +5,9 @@ import {
 	serializerCompiler,
 } from "fastify-type-provider-zod";
 
+import { HTTP_RESPONSE_CODE } from "@transaction-dispute-portal/shared";
+
 import { error } from "./error.js";
-import { notFound } from "./not-found.js";
 import { authorize } from "./authorize.js";
 import { authenticate } from "./authenticate.js";
 import { onRequestTimerHook, onResponseLoggingHook } from "./logging.js";
@@ -14,14 +15,7 @@ import { onRequestTimerHook, onResponseLoggingHook } from "./logging.js";
 import { env } from "../lib/env.js";
 import { connection, close } from "../database/config.js";
 
-/**
- * Register every cross-cutting plugin, hook, and decorator on the app, in
- * order: security plugins, zod compilers, the error handler, request
- * timing/logging hooks, and the `authenticate`/`authorize`/`connection`
- * decorators route modules rely on. The `connection` decorator is the pooled
- * Drizzle connection; repository functions take it (or a `tx`) as their first
- * argument.
- */
+/** Register every cross-cutting plugin, hook, and decorator on the app. */
 export const middlewares = async (app: FastifyInstance): Promise<void> => {
 	await app.register(import("@fastify/helmet"), {
 		contentSecurityPolicy: {
@@ -62,7 +56,13 @@ export const middlewares = async (app: FastifyInstance): Promise<void> => {
 	});
 
 	app.setErrorHandler(error);
-	app.setNotFoundHandler(notFound);
+	app.setNotFoundHandler((request, reply) => {
+		const { status, code } = HTTP_RESPONSE_CODE.NOT_FOUND;
+		return reply.status(status).send({
+			code,
+			message: `Route ${request.method} ${request.url} does not exist.`,
+		});
+	});
 	app.setValidatorCompiler(validatorCompiler);
 	app.setSerializerCompiler(serializerCompiler);
 

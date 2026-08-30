@@ -13,15 +13,7 @@ interface EmailOtpSignInPayload {
 	email: string;
 }
 
-/**
- * Thin wrappers over the Better Auth server API. Better Auth talks to its own
- * HTTP-boundary API, so these sit alongside the Drizzle repos but can't join a
- * Drizzle transaction — they take request headers, never an `Executor`.
- */
-
-/**
- * Send a one-time sign-in code to the given email.
- */
+/** Send a one-time sign-in code to the given email. */
 export const sendSignInOtp = async (
 	headers: FastifyRequest["headers"],
 	payload: EmailOtpRequestPayload,
@@ -31,10 +23,7 @@ export const sendSignInOtp = async (
 		body: { ...payload, type: "sign-in" },
 	});
 
-/**
- * Verify a sign-in code and, on success, establish a session. Returned as a
- * `Response` so the caller can forward its `set-cookie` header.
- */
+/** Verify a sign-in code and, on success, establish a session. */
 export const verifySignInOtp = async (
 	headers: FastifyRequest["headers"],
 	payload: EmailOtpSignInPayload,
@@ -45,10 +34,7 @@ export const verifySignInOtp = async (
 		body: payload,
 	});
 
-/**
- * End the current session. Returned as a `Response` so the caller can forward
- * its `set-cookie` header.
- */
+/** End the current session. */
 export const signOut = async (
 	headers: FastifyRequest["headers"],
 ): Promise<Response> =>
