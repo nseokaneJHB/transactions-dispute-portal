@@ -148,6 +148,10 @@ export const API_PATHS = {
 	HEALTHZ: "/healthz",
 	READYZ: "/readyz",
 
+	AUTH_OTP_REQUEST: "/otp",
+	AUTH_OTP_VERIFY: "/otp/verify",
+	AUTH_SIGN_OUT: "/sign-out",
+
 	TRANSACTIONS: "/transactions",
 	TRANSACTION_DETAIL: "/transactions/:transactionId",
 
