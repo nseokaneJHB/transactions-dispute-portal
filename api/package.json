@@ -11,6 +11,8 @@
 		"lint": "eslint .",
 		"generate": "drizzle-kit generate",
 		"migrate": "tsx src/database/migrate.ts",
+		"db:seed": "tsx src/database/seed.ts",
+		"db:purge": "tsx src/database/purge.ts",
 		"clean": "rm -rf node_modules dist"
 	},
 	"dependencies": {
@@ -31,6 +33,7 @@
 		"zod": "4.4.3"
 	},
 	"devDependencies": {
+		"@faker-js/faker": "10.4.0",
 		"@types/node": "25.8.0",
 		"@types/nodemailer": "8.0.0",
 		"drizzle-kit": "0.31.10",
