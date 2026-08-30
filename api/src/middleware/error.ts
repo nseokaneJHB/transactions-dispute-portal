@@ -1,6 +1,7 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 
 import { APIError } from "better-auth";
+import { DrizzleQueryError } from "drizzle-orm/errors";
 
 import {
 	HTTP_CODE,
@@ -11,6 +12,19 @@ import {
 const CODE_BY_STATUS = new Map(
 	Object.values(HTTP_RESPONSE_CODE).map(({ status, code }) => [status, code]),
 );
+
+/** The postgres-js driver error Drizzle nests under `DrizzleQueryError.cause`. */
+interface PostgresDriverError extends Error {
+	code?: string;
+	detail?: string;
+	constraint_name?: string;
+}
+
+/** Friendly 409 copy per unique constraint; falls back to a generic message. */
+const CONFLICT_MESSAGE: Record<string, string> = {
+	dispute_open_per_transaction_uq_idx:
+		"This transaction already has an open dispute.",
+};
 
 /** Central error handler — maps known errors onto the shared response envelope. */
 export const error = async (
@@ -35,6 +49,20 @@ export const error = async (
 	if (error instanceof APIError) {
 		const { status, code } = HTTP_RESPONSE_CODE.BAD_REQUEST;
 		return reply.status(status).send({ code, message: error.message });
+	}
+
+	if (error instanceof DrizzleQueryError) {
+		const driverError = error.cause as PostgresDriverError | undefined;
+
+		if (driverError?.code === "23505") {
+			const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
+			return reply.status(status).send({
+				code,
+				message:
+					CONFLICT_MESSAGE[driverError.constraint_name ?? ""] ??
+					"That conflicts with a record that already exists.",
+			});
+		}
 	}
 
 	const { statusCode } = error;

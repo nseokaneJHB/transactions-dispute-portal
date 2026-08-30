@@ -20,7 +20,7 @@ export const UserModel = pgTable(
 	{
 		id: uuid("id").primaryKey().default(sql`uuidv7()`),
 		image: text("image"),
-		name: varchar("name", { length: 255 }),
+		name: varchar("name", { length: 255 }).notNull(),
 		email: varchar("email", { length: 255 }).notNull().unique(),
 		email_verified: boolean("email_verified").default(false).notNull(),
 

@@ -3,10 +3,8 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 
 import {
-	USER_ROLE,
 	FRONTEND_URLS,
 	HTTP_RESPONSE_CODE,
-	type Role,
 	type GlobalResponse,
 } from "@transaction-dispute-portal/shared";
 
@@ -41,10 +39,10 @@ export const authenticate = async (
 
 	request.user = {
 		id: user.id,
-		name: user.name ?? null,
+		name: user.name,
 		email: user.email,
 		image: user.image ?? null,
-		role: (user.role as Role) ?? USER_ROLE.CUSTOMER,
+		role: user.role,
 		email_verified: user.emailVerified,
 		created_at: user.createdAt,
 		updated_at: user.updatedAt,

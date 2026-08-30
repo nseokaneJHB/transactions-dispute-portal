@@ -5,25 +5,46 @@ import {
 	API_PATHS,
 	uuidParamsSchema,
 	globalResponseSchema,
-	transactionsQuerySchema,
-	transactionResponseSchema,
-	transactionListResponseSchema,
+	disputesQuerySchema,
+	disputeResponseSchema,
+	disputeCreateBodySchema,
+	disputeListResponseSchema,
 } from "@transaction-dispute-portal/shared";
 
-import { getTransaction, listTransactions } from "./service.js";
+import { getDispute, listDisputes, submitDispute } from "./service.js";
 
 export const route: FastifyPluginAsync = async (
 	app: FastifyInstance,
 ): Promise<void> => {
 	app.route({
-		method: "GET",
-		url: API_PATHS.TRANSACTIONS,
-		handler: listTransactions,
+		method: "POST",
+		url: API_PATHS.DISPUTES,
+		handler: submitDispute,
 		preHandler: [app.authenticate, app.authorize(USER_ROLE.CUSTOMER)],
 		schema: {
-			querystring: transactionsQuerySchema,
+			body: disputeCreateBodySchema,
 			response: {
-				200: transactionListResponseSchema,
+				201: disputeResponseSchema,
+				401: globalResponseSchema,
+				403: globalResponseSchema,
+				404: globalResponseSchema,
+				409: globalResponseSchema,
+				422: globalResponseSchema,
+				429: globalResponseSchema,
+				500: globalResponseSchema,
+			},
+		},
+	});
+
+	app.route({
+		method: "GET",
+		url: API_PATHS.DISPUTES,
+		handler: listDisputes,
+		preHandler: [app.authenticate, app.authorize(USER_ROLE.CUSTOMER)],
+		schema: {
+			querystring: disputesQuerySchema,
+			response: {
+				200: disputeListResponseSchema,
 				401: globalResponseSchema,
 				403: globalResponseSchema,
 				422: globalResponseSchema,
@@ -35,13 +56,13 @@ export const route: FastifyPluginAsync = async (
 
 	app.route({
 		method: "GET",
-		url: API_PATHS.TRANSACTION_DETAIL,
-		handler: getTransaction,
+		url: API_PATHS.DISPUTE_DETAIL,
+		handler: getDispute,
 		preHandler: [app.authenticate, app.authorize(USER_ROLE.CUSTOMER)],
 		schema: {
-			params: uuidParamsSchema("transactionId"),
+			params: uuidParamsSchema("disputeId"),
 			response: {
-				200: transactionResponseSchema,
+				200: disputeResponseSchema,
 				401: globalResponseSchema,
 				403: globalResponseSchema,
 				404: globalResponseSchema,

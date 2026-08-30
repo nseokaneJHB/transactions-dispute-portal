@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import {
+	DISPUTE_REASON,
+	DISPUTE_STATUS,
 	HTTP_CODE,
 	ORDER_DIRECTION,
 	SERVER_STATUS,
@@ -58,3 +60,20 @@ export const serverStatusSchema = z
 	.describe("Server health status");
 
 export const roleSchema = z.enum(USER_ROLE).describe("User's role");
+
+export const disputeStatusSchema = z
+	.enum(DISPUTE_STATUS)
+	.describe("Dispute lifecycle status");
+
+export const disputeReasonSchema = z
+	.enum(DISPUTE_REASON)
+	.describe("Why the customer is disputing the charge");
+
+/**
+ * Path-param schema for any route whose sole parameter is a single UUID —
+ * `uuidParamsSchema("transactionId")` for `/transactions/:transactionId`,
+ * `uuidParamsSchema("disputeId")` for `/disputes/:disputeId`, etc. Keeps the
+ * "malformed id is a 422" contract identical across every detail route.
+ */
+export const uuidParamsSchema = <Key extends string>(key: Key) =>
+	z.object({ [key]: uuidSchema } as Record<Key, typeof uuidSchema>);
