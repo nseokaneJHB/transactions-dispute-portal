@@ -1,6 +1,7 @@
 import type { RouteGenericInterface } from "fastify";
 
 import type {
+	UuidParams,
 	GlobalResponse,
 	TransactionsQuery,
 	TransactionResponse,
@@ -13,6 +14,6 @@ export interface ListTransactionsRequest extends RouteGenericInterface {
 }
 
 export interface GetTransactionRequest extends RouteGenericInterface {
-	Params: { transactionId: string };
+	Params: UuidParams<"transactionId">;
 	Reply: TransactionResponse | GlobalResponse;
 }

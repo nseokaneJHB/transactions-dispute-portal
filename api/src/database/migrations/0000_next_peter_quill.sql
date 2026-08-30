@@ -68,7 +68,7 @@ CREATE TABLE "dispute" (
 CREATE TABLE "user" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"image" text,
-	"name" varchar(255),
+	"name" varchar(255) NOT NULL,
 	"email" varchar(255) NOT NULL,
 	"email_verified" boolean DEFAULT false NOT NULL,
 	"role" "userRole" DEFAULT 'CUSTOMER' NOT NULL,

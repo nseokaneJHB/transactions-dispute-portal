@@ -1,11 +1,9 @@
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 
-import { z } from "zod";
-
 import {
 	USER_ROLE,
 	API_PATHS,
-	uuidSchema,
+	uuidParamsSchema,
 	globalResponseSchema,
 	transactionsQuerySchema,
 	transactionResponseSchema,
@@ -13,8 +11,6 @@ import {
 } from "@transaction-dispute-portal/shared";
 
 import { getTransaction, listTransactions } from "./service.js";
-
-const transactionParamsSchema = z.object({ transactionId: uuidSchema });
 
 export const route: FastifyPluginAsync = async (
 	app: FastifyInstance,
@@ -43,7 +39,7 @@ export const route: FastifyPluginAsync = async (
 		handler: getTransaction,
 		preHandler: [app.authenticate, app.authorize(USER_ROLE.CUSTOMER)],
 		schema: {
-			params: transactionParamsSchema,
+			params: uuidParamsSchema("transactionId"),
 			response: {
 				200: transactionResponseSchema,
 				401: globalResponseSchema,

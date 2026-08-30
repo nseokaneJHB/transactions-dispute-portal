@@ -122,7 +122,7 @@ export const API_NAMESPACE = {
 	AUTH: "AUTH",
 	ADMIN: "ADMIN",
 	HEALTH: "HEALTH",
-	PUBLIC: "PUBLIC",
+	CUSTOMER: "CUSTOMER",
 } as const;
 
 export type ApiNamespace = keyof typeof API_NAMESPACE;
@@ -130,19 +130,22 @@ export type ApiNamespace = keyof typeof API_NAMESPACE;
 /**
  * Resolve each API namespace to its concrete base path for a given version.
  * Health checks stay unversioned (`docs/decisions.md` #18) — infra probes are
- * not API consumers — so `HEALTH` resolves to an empty prefix.
+ * not API consumers — so `HEALTH` resolves to an empty prefix. `CUSTOMER` is
+ * the customer-facing product surface mounted at the bare version root, as
+ * opposed to the invite-only `ADMIN` back-office; every route under it still
+ * requires a customer session.
  *
  * @example
  * const urls = API_URLS("v1");
- * urls.PUBLIC; // "/v1"
- * urls.ADMIN;  // "/v1/admin"
+ * urls.CUSTOMER; // "/v1"
+ * urls.ADMIN;    // "/v1/admin"
  */
 export const API_URLS = <V extends string>(
 	version: V,
 ): Record<ApiNamespace, string> => ({
 	HEALTH: "",
 	AUTH: `/${version}/auth`,
-	PUBLIC: `/${version}`,
+	CUSTOMER: `/${version}`,
 	ADMIN: `/${version}/admin`,
 });
 
