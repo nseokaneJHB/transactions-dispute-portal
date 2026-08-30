@@ -63,8 +63,9 @@ USER node
 
 COPY --chown=node:node --from=prod-deps /workspace/node_modules ./node_modules
 COPY --chown=node:node --from=prod-deps /workspace/api/node_modules ./api/node_modules
-# shared has no runtime dependencies today, so pnpm never creates
-# shared/node_modules — re-add this COPY if that changes.
+# shared/dist imports zod at load time (schema files), and the api runtime now
+# imports shared — so shared's own node_modules must ship too.
+COPY --chown=node:node --from=prod-deps /workspace/shared/node_modules ./shared/node_modules
 COPY --chown=node:node --from=prod-deps /workspace/api/package.json ./api/package.json
 COPY --chown=node:node --from=prod-deps /workspace/shared/package.json ./shared/package.json
 

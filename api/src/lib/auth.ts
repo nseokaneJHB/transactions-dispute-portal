@@ -121,11 +121,7 @@ export const auth = betterAuth({
 		}),
 	],
 
-	rateLimit: {
-		enabled: true,
-		max: env.RATE_LIMIT_MAX,
-		window: env.RATE_LIMIT_WINDOW,
-	},
+	rateLimit: { enabled: false },
 
 	advanced: {
 		cookiePrefix: "transaction-dispute-portal",
