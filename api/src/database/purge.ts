@@ -8,12 +8,7 @@ if (!connectionString) {
 
 const MIGRATIONS_TABLE = "__drizzle_migrations";
 
-/**
- * Truncate every table in the `public` schema except Drizzle's migration
- * ledger, resetting identities and cascading through foreign keys. Leaves the
- * schema itself (and applied migrations) intact — run `migrate` is not needed
- * afterwards, only `seed`.
- */
+/** Truncate every table in the `public` schema except the migration ledger. */
 const purge = async (): Promise<void> => {
 	const sql = postgres(connectionString, { max: 1, prepare: false });
 

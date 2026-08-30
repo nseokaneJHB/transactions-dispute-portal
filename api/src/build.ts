@@ -15,9 +15,7 @@ import { middlewares } from "./middleware/index.js";
 import { generateUuid } from "./lib/util.js";
 
 /**
- * Construct the fully-wired Fastify app: middlewares, then routes, then
- * `ready()`. Separate from `app.ts` (which calls `listen()`) so tests can build
- * an instance without binding a port.
+ * Construct the fully-wired Fastify app, short of `listen()`.
  *
  * @param logger - The Pino instance to attach; omitted in tests.
  */

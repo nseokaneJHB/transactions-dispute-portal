@@ -16,13 +16,7 @@ import type {
 	SessionModelSelect,
 } from "../database/schema/index.js";
 
-/**
- * Require a valid Better Auth session. On success, attaches the mapped user and
- * session (snake_case, matching our schema types) to the request for
- * downstream handlers. On failure, responds `401` with a redirect to sign-in.
- *
- * Usage: `preHandler: [app.authenticate]`.
- */
+/** Require a valid Better Auth session, attaching the user and session to the request. */
 export const authenticate = async (
 	request: FastifyRequest,
 	reply: FastifyReply,

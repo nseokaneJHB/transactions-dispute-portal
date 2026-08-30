@@ -35,11 +35,7 @@ const forwardSessionCookies = (reply: FastifyReply, source: Response): void => {
 	if (cookies.length > 0) reply.header("set-cookie", cookies);
 };
 
-/**
- * `POST /v1/auth/otp` — send a one-time sign-in code. The response is identical
- * whether or not an account exists for the address (Better Auth only actually
- * sends mail for a known account), so it can't be used to probe for users.
- */
+/** `POST /v1/auth/otp` — send a one-time sign-in code by email. */
 export const requestOtp = async (
 	request: FastifyRequest<RequestOtpRequest>,
 	reply: FastifyReply<RequestOtpRequest>,
@@ -63,11 +59,7 @@ export const requestOtp = async (
 	});
 };
 
-/**
- * `POST /v1/auth/otp/verify` — exchange the emailed code for a session. Forwards
- * Better Auth's `Set-Cookie` on success and writes a `LOGIN_SUCCESS` /
- * `LOGIN_FAILURE` / `OTP_LOCKED` audit row either way.
- */
+/** `POST /v1/auth/otp/verify` — exchange the emailed code for a session cookie. */
 export const verifyOtp = async (
 	request: FastifyRequest<VerifyOtpRequest>,
 	reply: FastifyReply<VerifyOtpRequest>,
@@ -118,10 +110,7 @@ export const verifyOtp = async (
 	});
 };
 
-/**
- * `POST /v1/auth/sign-out` — end the current session unconditionally. Safe to
- * call without a session; forwards the cookie-clearing `Set-Cookie` either way.
- */
+/** `POST /v1/auth/sign-out` — end the current session. */
 export const endSession = async (
 	request: FastifyRequest<SignOutRequest>,
 	reply: FastifyReply<SignOutRequest>,

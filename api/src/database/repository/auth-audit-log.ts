@@ -18,10 +18,7 @@ const VARCHAR_LIMIT = 255;
 const clamp = (value?: string | null): string | null =>
 	value ? value.slice(0, VARCHAR_LIMIT) : null;
 
-/**
- * Append one row to `auth_audit_log`. Keyed by `email` (a failed attempt may
- * not resolve to a user), with `user_id` filled in only on a successful login.
- */
+/** Append one row to `auth_audit_log`. */
 export const recordAuthEvent = async (
 	executor: Executor,
 	record: AuthEventRecord,

@@ -7,8 +7,7 @@ import {
 } from "@transaction-dispute-portal/shared";
 
 /**
- * Require the authenticated user to hold one of `allowedRoles`. Runs after
- * `authenticate`, which has already put the user on the request.
+ * Require the authenticated user to hold one of `allowedRoles`.
  *
  * @param allowedRoles - A role, or list of roles, permitted on this route.
  */

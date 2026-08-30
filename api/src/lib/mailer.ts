@@ -20,13 +20,9 @@ const transport = createTransport({
 });
 
 /**
- * Send a single transactional email through the configured SMTP transport.
- * Failures are logged and swallowed rather than thrown: Better Auth advises
- * against awaiting OTP delivery to avoid timing attacks, so callers fire and
- * forget and a delivery error must not surface as a login failure.
+ * Send one transactional email through the SMTP transport; errors are logged, not thrown.
  *
  * @param content - The recipient, subject, and HTML body of the message.
- * @returns A promise that resolves once the send attempt completes.
  */
 export const sendEmail = async (content: EmailContent): Promise<void> => {
 	try {

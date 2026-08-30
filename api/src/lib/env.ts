@@ -47,8 +47,7 @@ export type Env = z.infer<typeof envSchema>;
 let _env: Env | null = null;
 
 /**
- * Parse and validate environment variables from `process.env` once, caching
- * the result. Exits the process with a readable report if validation fails.
+ * Parse and validate `process.env` once, exiting on failure.
  *
  * @returns The validated, typed environment object.
  */

@@ -3,15 +3,16 @@ import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { APIError } from "better-auth";
 
 import {
+	HTTP_CODE,
 	HTTP_RESPONSE_CODE,
 	type GlobalResponse,
 } from "@transaction-dispute-portal/shared";
 
-/**
- * Central error handler. Maps the error classes we expect — schema validation,
- * Better Auth API errors, `@fastify/rate-limit`'s 429 — onto the shared response
- * envelope, and falls back to a logged `500` for anything unrecognized.
- */
+const CODE_BY_STATUS = new Map(
+	Object.values(HTTP_RESPONSE_CODE).map(({ status, code }) => [status, code]),
+);
+
+/** Central error handler — maps known errors onto the shared response envelope. */
 export const error = async (
 	error: FastifyError,
 	request: FastifyRequest,
@@ -31,33 +32,26 @@ export const error = async (
 		return reply.status(status).send(response);
 	}
 
-	if (error.statusCode === 429) {
-		const { status, code } = HTTP_RESPONSE_CODE.TOO_MANY_REQUESTS;
-		const response: GlobalResponse = {
-			code,
-			message: "Too many requests. Please slow down and try again shortly.",
-		};
-
-		return reply.status(status).send(response);
-	}
-
 	if (error instanceof APIError) {
 		const { status, code } = HTTP_RESPONSE_CODE.BAD_REQUEST;
-		const response: GlobalResponse = {
-			code,
-			message: error.message,
-		};
+		return reply.status(status).send({ code, message: error.message });
+	}
 
-		return reply.status(status).send(response);
+	const { statusCode } = error;
+	if (statusCode && statusCode >= 400 && statusCode < 500) {
+		return reply.status(statusCode).send({
+			code: CODE_BY_STATUS.get(statusCode) ?? HTTP_CODE.BAD_REQUEST,
+			message:
+				statusCode === 429
+					? "Too many requests. Please slow down and try again shortly."
+					: error.message,
+		});
 	}
 
 	request.log.error({ err: error }, "Unhandled error");
 
 	const { status, code } = HTTP_RESPONSE_CODE.INTERNAL_SERVER_ERROR;
-	const response: GlobalResponse = {
-		code,
-		message: "An internal server error occurred.",
-	};
-
-	return reply.status(status).send(response);
+	return reply
+		.status(status)
+		.send({ code, message: "An internal server error occurred." });
 };

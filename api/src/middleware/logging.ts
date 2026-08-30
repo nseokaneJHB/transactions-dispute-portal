@@ -6,11 +6,7 @@ const CORRELATION_HEADER = "x-correlation-id";
 
 const IGNORED_ROUTES: readonly string[] = [API_PATHS.HEALTHZ, API_PATHS.READYZ];
 
-/**
- * `onRequest`: stamp a high-resolution start time so the response hook can
- * measure latency, and echo the correlation id (Fastify's request id, seeded
- * from the inbound `x-correlation-id` / `x-request-id` header) on the response.
- */
+/** `onRequest`: stamp the start time and echo the correlation id on the response. */
 export const onRequestTimerHook = async (
 	request: FastifyRequest,
 	reply: FastifyReply,
@@ -19,11 +15,7 @@ export const onRequestTimerHook = async (
 	reply.header(CORRELATION_HEADER, request.id);
 };
 
-/**
- * `onResponse`: emit one structured log line per request — method, matched
- * route, status, latency, correlation id — at a level derived from the status
- * class. Health probes are skipped to keep logs readable.
- */
+/** `onResponse`: emit one structured log line per request (health probes excepted). */
 export const onResponseLoggingHook = async (
 	request: FastifyRequest,
 	reply: FastifyReply,
