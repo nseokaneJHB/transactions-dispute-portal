@@ -14,6 +14,11 @@ export interface ListDisputesForReviewRequest extends RouteGenericInterface {
 	Reply: AdminDisputeListResponse | GlobalResponse;
 }
 
+export interface StartDisputeReviewRequest extends RouteGenericInterface {
+	Params: UuidParams<"disputeId">;
+	Reply: AdminDisputeResponse | GlobalResponse;
+}
+
 export interface ResolveDisputeRequest extends RouteGenericInterface {
 	Params: UuidParams<"disputeId">;
 	Body: DisputeResolveBody;

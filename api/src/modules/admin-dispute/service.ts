@@ -2,32 +2,28 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import {
 	DISPUTE_STATUS,
-	OPEN_DISPUTE_STATUS,
 	HTTP_RESPONSE_CODE,
 } from "@transaction-dispute-portal/shared";
-import type {
-	AdminDispute,
-	DisputeStatus,
-} from "@transaction-dispute-portal/shared";
+import type { AdminDispute } from "@transaction-dispute-portal/shared";
 
 import {
 	findDisputeById,
 	findDisputesForReview,
+	markDisputeUnderReview,
 	recordDisputeStatusChange,
 	resolveDispute,
 } from "../../database/repository/index.js";
-import type { DisputeReviewRow } from "../../database/repository/dispute.js";
+import type { DisputeModelSelect } from "../../database/schema/index.js";
 
 import { publishDisputeUpdate } from "../../lib/notifier.js";
 
 import type {
 	ListDisputesForReviewRequest,
 	ResolveDisputeRequest,
+	StartDisputeReviewRequest,
 } from "./type.js";
 
-const OPEN_STATUSES: readonly DisputeStatus[] = OPEN_DISPUTE_STATUS;
-
-const toWire = (row: DisputeReviewRow): AdminDispute => ({
+const toWire = (row: DisputeModelSelect): AdminDispute => ({
 	id: row.id,
 	user_id: row.user_id,
 	transaction_id: row.transaction_id,
@@ -64,7 +60,72 @@ export const listDisputesForReview = async (
 	});
 };
 
-/** `POST /v1/admin/disputes/:disputeId/resolve` — the reviewer decision path. */
+/** `POST /v1/admin/disputes/:disputeId/review` — move a submitted dispute to `UNDER_REVIEW`. */
+export const startDisputeReview = async (
+	request: FastifyRequest<StartDisputeReviewRequest>,
+	reply: FastifyReply<StartDisputeReviewRequest>,
+): Promise<void> => {
+	const { disputeId } = request.params;
+	const reviewerId = request.user!.id;
+
+	const dispute = await findDisputeById(request.server.connection, {
+		id: disputeId,
+	});
+
+	if (!dispute) {
+		const { status, code } = HTTP_RESPONSE_CODE.NOT_FOUND;
+		return reply.status(status).send({ code, message: "Dispute not found." });
+	}
+
+	if (dispute.status === DISPUTE_STATUS.UNDER_REVIEW) {
+		const { status, code } = HTTP_RESPONSE_CODE.OK;
+		return reply.status(status).send({
+			code,
+			message: "Dispute is already under review.",
+			data: toWire(dispute),
+		});
+	}
+
+	if (dispute.status !== DISPUTE_STATUS.SUBMITTED) {
+		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
+		return reply
+			.status(status)
+			.send({ code, message: "This dispute has already been resolved." });
+	}
+
+	const reviewed = await request.server.connection.transaction(async (tx) => {
+		const row = await markDisputeUnderReview(tx, { id: disputeId });
+		if (!row) return undefined;
+
+		await recordDisputeStatusChange(tx, {
+			disputeId,
+			actorId: reviewerId,
+			fromStatus: DISPUTE_STATUS.SUBMITTED,
+			toStatus: DISPUTE_STATUS.UNDER_REVIEW,
+			note: "Moved to review by the reviewer.",
+		});
+
+		return row;
+	});
+
+	if (!reviewed) {
+		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
+		return reply
+			.status(status)
+			.send({ code, message: "This dispute is no longer awaiting review." });
+	}
+
+	await publishDisputeUpdate(reviewed.user_id, reviewed.status);
+
+	const { status, code } = HTTP_RESPONSE_CODE.OK;
+	return reply.status(status).send({
+		code,
+		message: "Dispute moved to review.",
+		data: toWire(reviewed),
+	});
+};
+
+/** `POST /v1/admin/disputes/:disputeId/resolve` — close a dispute that is under review. */
 export const resolveDisputeForReview = async (
 	request: FastifyRequest<ResolveDisputeRequest>,
 	reply: FastifyReply<ResolveDisputeRequest>,
@@ -82,14 +143,20 @@ export const resolveDisputeForReview = async (
 		return reply.status(status).send({ code, message: "Dispute not found." });
 	}
 
-	const alreadyClosed = () => {
+	if (dispute.status === DISPUTE_STATUS.SUBMITTED) {
+		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
+		return reply.status(status).send({
+			code,
+			message: "This dispute must be moved to review before it can be resolved.",
+		});
+	}
+
+	if (dispute.status !== DISPUTE_STATUS.UNDER_REVIEW) {
 		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
 		return reply
 			.status(status)
 			.send({ code, message: "This dispute has already been resolved." });
-	};
-
-	if (!OPEN_STATUSES.includes(dispute.status)) return alreadyClosed();
+	}
 
 	const resolved = await request.server.connection.transaction(async (tx) => {
 		const row = await resolveDispute(tx, {
@@ -98,13 +165,12 @@ export const resolveDisputeForReview = async (
 			note,
 			resolvedBy: reviewerId,
 		});
-
 		if (!row) return undefined;
 
 		await recordDisputeStatusChange(tx, {
 			disputeId,
 			actorId: reviewerId,
-			fromStatus: dispute.status,
+			fromStatus: DISPUTE_STATUS.UNDER_REVIEW,
 			toStatus: resolution,
 			note,
 		});
@@ -112,7 +178,12 @@ export const resolveDisputeForReview = async (
 		return row;
 	});
 
-	if (!resolved) return alreadyClosed();
+	if (!resolved) {
+		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
+		return reply
+			.status(status)
+			.send({ code, message: "This dispute has already been resolved." });
+	}
 
 	await publishDisputeUpdate(resolved.user_id, resolved.status);
 

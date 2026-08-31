@@ -174,6 +174,7 @@ export const API_PATHS = {
 	DISPUTE_DETAIL: "/disputes/:disputeId",
 
 	ADMIN_DISPUTES: "/disputes",
+	ADMIN_DISPUTE_REVIEW: "/disputes/:disputeId/review",
 	ADMIN_DISPUTE_RESOLVE: "/disputes/:disputeId/resolve",
 	ADMIN_INVITES: "/invites",
 	ADMIN_INVITE_ACCEPT: "/invites/:token/accept",
