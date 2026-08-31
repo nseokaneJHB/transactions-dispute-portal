@@ -1,17 +1,13 @@
 name: Build
 
-on:
-  push:
-    branches-ignore: [main]
-  pull_request:
-  workflow_call:
+on: [push, pull_request]
 
 concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint-typecheck-build-test:
+  check:
     name: Lint, typecheck, build, test
     runs-on: ubuntu-latest
     steps:
@@ -40,14 +36,25 @@ jobs:
       - name: Test
         run: pnpm test
 
-  docker-build:
-    name: Docker build (${{ matrix.app }})
+  stack:
+    name: Dev stack smoke test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        app: [api, web]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build production image
-        run: docker build -f ${{ matrix.app }}/Dockerfile -t transaction-dispute-portal-${{ matrix.app }}:ci .
+      - name: Bring up the stack
+        run: docker compose up -d --build --wait --wait-timeout 300
+
+      - name: API is serving
+        run: curl -fsS http://localhost:8080/healthz
+
+      - name: Seed loads cleanly
+        run: docker compose exec -T transaction-dispute-portal-api pnpm --filter @transaction-dispute-portal/api db:seed
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
