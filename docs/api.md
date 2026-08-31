@@ -20,16 +20,21 @@ Every route here is gated `authenticate` + `authorize(CUSTOMER)` — an `ADMIN` 
 
 - `GET /v1/transactions` — **built.** A page of the caller's own transactions, ordered on `transacted_at`. Query: `from` / `to` (`YYYY-MM-DD`, inclusive, `from ≤ to`), `order` (`asc` / `desc`, default `desc`), `page`, `limit` (≤ 100). `paginatedGlobalResponseSchema` + `data: transaction[]` — `count` is the full match total, `total` the page size.
 - `GET /v1/transactions/:transactionId` — **built.** One transaction, **only if it belongs to the caller** — another user's row (or a well-formed id that doesn't exist) is a `404`, never a `403`, so ownership can't be probed (`docs/decisions.md` #39). A malformed id is a `422` (UUID params schema).
-- `POST /v1/disputes` — body: `transactionId`, `reason`, `description`; idempotent — reject with a clear error if the transaction already has an open dispute (`SUBMITTED` or `UNDER_REVIEW`), and treat a duplicate idempotency key as a no-op rather than a second row. This is the answer to "what happens on a client retry/double-click" and doubles as the one-open-dispute-per-transaction guard.
-- `GET /v1/disputes` — the historic view: paginated, filterable by status
-- `GET /v1/disputes/:id`
+- `POST /v1/disputes` — **built.** Body: `transactionId`, `reason`, `description`. A second open dispute on the same transaction (`SUBMITTED`/`UNDER_REVIEW`) is a `409` — enforced by the partial unique index + the global error handler, no pre-check, no `Idempotency-Key` (`docs/decisions.md` #40). A transaction that isn't the caller's → `404` (#39). Opens the dispute + writes the first `DisputeAuditLog` row in one transaction.
+- `GET /v1/disputes` — **built.** The historic view: a page of the caller's own disputes, optional `status` filter, `order`/`page`/`limit`.
+- `GET /v1/disputes/:disputeId` — **built.** One dispute, scoped to the caller (other-user/missing → `404`, malformed id → `422`).
 
 ## Admin, admin-session-authenticated (Better Auth session carrying `admin` role — `docs/decisions.md` #16)
 
-- `GET /v1/admin/disputes` — disputes needing review, paginated/filterable by status
-- `POST /v1/admin/disputes/:id/resolve` — the real reviewer-decision path; body carries the resolution + reason, written to `DisputeAuditLog` same as today
-- `POST /v1/admin/invites` — seeded/existing admin invites a new admin by email; sends a real invite email (`docs/auth.md` §3-adjacent, decision 19). No self-service admin signup — an account is only created by accepting an invite
-- `POST /v1/admin/invites/:token/accept` — accepts an invite, creates the account with `admin` role. Login is email-OTP for every account, admin or customer, so there's nothing else to set up (`docs/decisions.md` #21)
+Every route here is `authenticate` + `authorize(ADMIN)` — a customer session is a `403`.
+
+- `GET /v1/admin/disputes` — **built.** A page of every customer's disputes for the review queue, optional `status` filter. Wire shape is the customer dispute + `user_id`.
+- `POST /v1/admin/disputes/:disputeId/review` — **built.** `SUBMITTED → UNDER_REVIEW`. Idempotent — a second call on an already-under-review dispute is a `200` no-op. Writes a `DisputeAuditLog` row, publishes to the customer's ntfy topic (`docs/decisions.md` #41).
+- `POST /v1/admin/disputes/:disputeId/resolve` — **built.** The reviewer-decision path; body `{ resolution: RESOLVED | REJECTED, note }`. **Requires `UNDER_REVIEW`** — resolving a still-`SUBMITTED` dispute is a `409` ("move it to review first"). Updates `status`/`resolution_note`/`resolved_by`/`resolved_at`, writes the `DisputeAuditLog` row, publishes to ntfy — one transaction. The legal-from-status check is in the `UPDATE … WHERE`, so concurrent resolves collapse to one write (`docs/decisions.md` #41).
+- `POST /v1/admin/invites` — *not built.* Seeded/existing admin invites a new admin by email; sends a real invite email (`docs/auth.md` §3-adjacent, decision 19). No self-service admin signup — an account is only created by accepting an invite.
+- `POST /v1/admin/invites/:token/accept` — *not built.* Accepts an invite, creates the account with `admin` role. Login is email-OTP for every account (`docs/decisions.md` #21).
+
+The dispute lifecycle is forward-only today (`SUBMITTED → UNDER_REVIEW → RESOLVED | REJECTED`, no backward edges, terminal states terminal). Real-world edge cases — reopen after a rejection, an admin declining a review, customer withdrawal — are a deliberate open design item (`docs/decisions.md` #41).
 
   A customer being able to resolve their own dispute would be a real hole in the authz story, not a shortcut — this keeps the customer and admin auth paths honestly separate.
 

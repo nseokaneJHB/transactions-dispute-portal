@@ -9,12 +9,14 @@ Ordered by submission value — the first two are the difference between "a
 skeleton" and "a working portal"; the rest are hardening of code that is already
 written.
 
-> **Status (2026-08-30):** #3, #4, and #6 are moot — the generic query builder
-> they patch was deleted with the rest of `api/src/database/repository/` (see
-> `overkill-implementation.md` #1); Pass 2 writes plain Drizzle. #7 (`readyz` DB
-> probe timeout) and #8 (shutdown order) are done. #5's stable-order half folds
-> into each Pass 2 query (append the primary key as a tiebreak); its idempotent-
-> submit half, plus #1, #2, #9, and #10, are the Pass 2 / Week-3 work.
+> **Status (2026-08-31):** #3, #4, and #6 are moot — the generic query builder
+> they patch was deleted (see `overkill-implementation.md` #1); the modules write
+> plain Drizzle. #7 (`readyz` DB probe timeout) and #8 (shutdown order) are done.
+> #5 is done both halves: every list query appends the primary key as an order
+> tiebreak, and submit idempotency is handled by the partial unique index +
+> global 409 handler — **not** the `Idempotency-Key` column this doc proposed
+> (`docs/decisions.md` #40 rejected that as machinery the DB constraint already
+> covers). #1, #2, #9, #10 remain Week-3 work.
 
 ---
 

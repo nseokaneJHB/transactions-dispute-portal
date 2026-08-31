@@ -58,7 +58,7 @@ A real deployment:
 
 Do **not** run migrations from the app's start command in production (the dev `compose.yml` does this only because it is safe to re-run against a disposable database). A schema change is a reviewed, approved step, independent of the code rollout (`docs/decisions.md` #24).
 
-The shape that existed before (`.github/workflows/migrate.yml`, removed in #34): `workflow_dispatch` → `drizzle-kit check` (snapshot/drift guard, no DB needed) → fail if the environment's `DATABASE_URL` secret is missing → `pnpm --filter @transaction-dispute-portal/api migrate`. `concurrency` with `cancel-in-progress: false` so two runs never touch one database at once.
+The shape that existed before (`.github/workflows/migrate.yml`, removed in `docs/decisions.md` #42): `workflow_dispatch` → `drizzle-kit check` (snapshot/drift guard, no DB needed) → fail if the environment's `DATABASE_URL` secret is missing → `pnpm --filter @transaction-dispute-portal/api migrate`. `concurrency` with `cancel-in-progress: false` so two runs never touch one database at once.
 
 ## 4. Email (SMTP) — on the login-critical path
 
