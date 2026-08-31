@@ -58,6 +58,23 @@ services:
         aliases:
           - mailpit
 
+  transaction-dispute-portal-ntfy:
+    image: binwiederhier/ntfy:latest
+    command: serve
+    restart: unless-stopped
+
+    environment:
+      NTFY_BASE_URL: http://localhost:8090
+      NTFY_LISTEN_HTTP: ":80"
+
+    ports:
+      - "8090:80"
+
+    networks:
+      transaction-dispute-portal:
+        aliases:
+          - ntfy
+
 volumes:
   transaction-dispute-portal-node_modules:
   transaction-dispute-portal-api-node_modules:
