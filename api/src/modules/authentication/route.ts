@@ -10,12 +10,8 @@ import {
 
 import { requestOtp, verifyOtp, endSession } from "./service.js";
 
-const RATE_LIMIT_WINDOW = 60_000;
-const OTP_REQUEST_RATE_LIMIT = { max: OTP.MAX_ATTEMPTS, timeWindow: RATE_LIMIT_WINDOW };
-const OTP_VERIFY_RATE_LIMIT = {
-	max: OTP.MAX_ATTEMPTS * 2,
-	timeWindow: RATE_LIMIT_WINDOW,
-};
+const OTP_REQUEST_RATE_LIMIT = { max: OTP.MAX_ATTEMPTS };
+const OTP_VERIFY_RATE_LIMIT = { max: OTP.MAX_ATTEMPTS * 2 };
 
 export const route: FastifyPluginAsync = async (
 	app: FastifyInstance,
