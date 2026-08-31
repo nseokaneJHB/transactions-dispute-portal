@@ -6,6 +6,7 @@ import {
 	HTTP_CODE,
 	ORDER_DIRECTION,
 	SERVER_STATUS,
+	TERMINAL_DISPUTE_STATUS,
 	USER_ROLE,
 } from "../constant.js";
 
@@ -68,6 +69,10 @@ export const disputeStatusSchema = z
 export const disputeReasonSchema = z
 	.enum(DISPUTE_REASON)
 	.describe("Why the customer is disputing the charge");
+
+export const disputeResolutionSchema = z
+	.enum(TERMINAL_DISPUTE_STATUS)
+	.describe("The reviewer's decision — the terminal status to move the dispute to");
 
 /**
  * Path-param schema for any route whose sole parameter is a single UUID —

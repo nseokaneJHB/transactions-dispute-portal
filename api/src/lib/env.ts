@@ -35,6 +35,8 @@ const envSchema = z.object({
 	RATE_LIMIT_MAX: z.string().default("100").transform(Number),
 	RATE_LIMIT_WINDOW: z.string().default("60").transform(Number),
 
+	NTFY_URL: z.string().default("http://ntfy"),
+
 	SMTP_HOST: z.string().default("mailpit"),
 	SMTP_PORT: z.string().default("1025").transform(Number),
 	SMTP_USER: z.string().default(""),

@@ -9,6 +9,7 @@ import {
 
 import {
 	disputeReasonSchema,
+	disputeResolutionSchema,
 	disputeStatusSchema,
 	orderDirectionSchema,
 	stringSchema,
@@ -89,4 +90,35 @@ export const disputeResponseSchema = globalResponseSchema.extend({
 /** Response for `GET /v1/disputes` — one page of disputes. */
 export const disputeListResponseSchema = paginatedGlobalResponseSchema.extend({
 	data: z.array(disputeSchema),
+});
+
+/**
+ * One dispute on the admin wire — the customer shape plus `user_id`, since a
+ * reviewer is not the owner and needs to know whose dispute it is.
+ */
+export const adminDisputeSchema = disputeSchema.extend({
+	user_id: uuidSchema.describe("The customer who opened the dispute"),
+});
+
+/**
+ * Body for `POST /v1/admin/disputes/:disputeId/resolve` — the reviewer's
+ * decision (`RESOLVED` / `REJECTED`) plus the note shown to the customer.
+ * Only reachable from an open dispute; a closed one is a `409`.
+ */
+export const disputeResolveBodySchema = z.object({
+	resolution: disputeResolutionSchema,
+	note: stringSchema
+		.min(1, "A resolution note is required.")
+		.max(2000, "Keep the note under 2000 characters.")
+		.describe("The reviewer's explanation, recorded on the dispute and its audit log"),
+});
+
+/** Response for `POST /v1/admin/disputes/:disputeId/resolve`. */
+export const adminDisputeResponseSchema = globalResponseSchema.extend({
+	data: adminDisputeSchema,
+});
+
+/** Response for `GET /v1/admin/disputes` — one page of disputes for review. */
+export const adminDisputeListResponseSchema = paginatedGlobalResponseSchema.extend({
+	data: z.array(adminDisputeSchema),
 });
