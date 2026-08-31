@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, lte } from "drizzle-orm";
 
 import { ORDER_DIRECTION } from "@transaction-dispute-portal/shared";
 import type { OrderDirection } from "@transaction-dispute-portal/shared";
@@ -8,19 +8,13 @@ import type { TransactionModelSelect } from "../schema/index.js";
 
 import type { Executor } from "../executor.js";
 
-const COLUMNS = {
-	id: TransactionModel.id,
-	amount_cents: TransactionModel.amount_cents,
-	merchant_name: TransactionModel.merchant_name,
-	transacted_at: TransactionModel.transacted_at,
-	created_at: TransactionModel.created_at,
-	updated_at: TransactionModel.updated_at,
-} as const;
+/**
+ * The customer path never selects `user_id` (always the caller) — excluded
+ * from the query itself, derived from the table so it follows schema changes.
+ */
+const { user_id, ...CUSTOMER_COLUMNS } = getTableColumns(TransactionModel);
 
-export type TransactionRow = Pick<
-	TransactionModelSelect,
-	keyof typeof COLUMNS
->;
+export type TransactionRow = Omit<TransactionModelSelect, "user_id">;
 
 interface FindManyOptions {
 	userId: string;
@@ -49,9 +43,9 @@ export const findTransactionsByUser = async (
 
 	const direction = options.order === ORDER_DIRECTION.asc ? asc : desc;
 
-	const [rows, [tally]] = await Promise.all([
+	const [rows, total] = await Promise.all([
 		executor
-			.select(COLUMNS)
+			.select(CUSTOMER_COLUMNS)
 			.from(TransactionModel)
 			.where(where)
 			.orderBy(
@@ -60,13 +54,10 @@ export const findTransactionsByUser = async (
 			)
 			.limit(options.limit)
 			.offset((options.page - 1) * options.limit),
-		executor
-			.select({ value: count() })
-			.from(TransactionModel)
-			.where(where),
+		executor.$count(TransactionModel, where),
 	]);
 
-	return { rows, total: tally?.value ?? 0 };
+	return { rows, total };
 };
 
 /** A single transaction, but only if it belongs to `userId` — otherwise `undefined`. */
@@ -75,7 +66,7 @@ export const findUserTransactionById = async (
 	options: { id: string; userId: string },
 ): Promise<TransactionRow | undefined> => {
 	const [row] = await executor
-		.select(COLUMNS)
+		.select(CUSTOMER_COLUMNS)
 		.from(TransactionModel)
 		.where(
 			and(
