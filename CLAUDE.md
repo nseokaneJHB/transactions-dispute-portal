@@ -21,6 +21,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - `docs/notifications.md` — ntfy for dispute-status events; scope boundary vs. auth-credential delivery (read before touching notifications)
 - `docs/auth.md` — how login credentials are verified as belonging to the signer-in: email-OTP login, rate limiting on OTP attempts, why (`docs/decisions.md` #21)
 - `docs/definition-of-done.md` — the completion checklist and suggested weekly pace
+- `docs/production-runbook.md` — this repo is dev-only (one `compose.yml`, one dev `Dockerfile` per package); the runbook is the step-by-step for making it production-ready (multi-stage images, real secrets, migrations as a gated step, a deploy pipeline, k8s)
 
 ## Conventions
 
@@ -28,7 +29,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - No speculative abstraction — don't introduce a service/repository/DI layer until there's a second concrete caller that needs it
 - Framework-native over generic: TanStack Router loaders for data fetching, never `useEffect` for it
 - Type logic lives in centralized helper files, not inlined per-component or per-route
-- Drizzle: `select` is explicit on every query's option type, never implicit
+- Drizzle: exclude unwanted columns from the query itself with `getTableColumns(table)` + rest-spread (`const { user_id, ...cols } = getTableColumns(X)`), not a `SELECT *` narrowed away in the type; a full-row `.select()` is fine for admin/internal reads that need every column
 
 ## Tech stack (decided — don't relitigate)
 
@@ -40,8 +41,8 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - ORM: Drizzle
 - DB: Postgres (`docs/decisions.md` #23)
 - Tests: Vitest
-- CI: GitHub Actions
-- Containers: Docker (multi-stage) + docker-compose for local dev; `k8s/` manifests as a bonus, not deployed
+- CI: GitHub Actions — lint/typecheck/build/test plus a `docker compose` smoke test of the dev stack. A real deploy pipeline is described in `docs/production-runbook.md`, not built
+- Containers: one dev `Dockerfile` per package + a single `compose.yml`. `docker compose up` is the entire local stack (Postgres, api, web, Mailpit, ntfy), migrations run on start, `db:seed` is one command. Production containerisation lives in `docs/production-runbook.md`, not built
 
 ## Explicitly out of scope
 

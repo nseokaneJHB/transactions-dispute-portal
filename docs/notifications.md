@@ -14,10 +14,10 @@ Auth is Better Auth email-OTP (`docs/decisions.md` #21 — see `docs/auth.md`) �
 
 ## How it's wired
 
-- `compose.yml` gains an `ntfy` service (official `binwiederhier/ntfy` image), alongside Postgres/api/web.
-- On a dispute status change (in the `POST /v1/admin/disputes/:id/resolve` handler — see `docs/api.md`), the api publishes to a per-user topic, e.g. `POST http://ntfy:80/dispute-updates-{userId}` with the new status as the message body.
+- `compose.yml` has an `ntfy` service (`binwiederhier/ntfy`), alongside Postgres/api/web/Mailpit. Web UI on `http://localhost:8090`; the api reaches it at `http://ntfy` (`env.NTFY_URL`).
+- On a dispute status change (the `POST /v1/admin/disputes/:id/review` **and** `.../resolve` handlers — see `docs/api.md`), `lib/notifier.ts`'s `publishDisputeUpdate` does a fire-and-forget `POST ${NTFY_URL}/dispute-updates-{userId}` with the new status (`UNDER_REVIEW` / `RESOLVED` / `REJECTED`) as the body. Failures are logged, never block or fail the request.
 - Per-user topics (not one shared topic) so one customer's dispute activity isn't visible to another — the same authz principle as everything else in `docs/domain-model.md`, applied to the notification channel too.
-- Local dev: subscribe via `curl -s http://localhost:8080/dispute-updates-{userId}/json` or the ntfy web UI to watch events arrive while testing the dispute flow.
+- Local dev: subscribe via `curl -s http://localhost:8090/dispute-updates-{userId}/json` or the ntfy web UI to watch events arrive while testing the dispute flow.
 
 ## Explicitly out of scope
 

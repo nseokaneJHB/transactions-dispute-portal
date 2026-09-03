@@ -7,6 +7,4 @@ export * from "./dispute.js";
 export * from "./dispute-audit-log.js";
 export * from "./admin-invite.js";
 export * from "./auth-audit-log.js";
-
-// Relations
 export * from "./relations.js";

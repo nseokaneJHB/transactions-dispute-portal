@@ -4,7 +4,10 @@ services:
     restart: unless-stopped
 
     env_file:
-      - ./env/.env.database
+      - ./env/development/.env.database
+
+    ports:
+      - "5432:5432"
 
     volumes:
       - transaction-dispute-portal-postgres_data:/var/lib/postgresql
@@ -25,12 +28,30 @@ services:
       dockerfile: api/Dockerfile
 
     restart: unless-stopped
+    working_dir: /workspace
+
+    command:
+      - sh
+      - -c
+      - >
+        pnpm --filter @transaction-dispute-portal/api migrate &&
+        pnpm --filter @transaction-dispute-portal/api dev --host 0.0.0.0
 
     env_file:
       - ./api/.env
 
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "100"
+
     ports:
       - "8080:8080"
+
+    volumes:
+      - .:/workspace
+      - transaction-dispute-portal-node_modules:/workspace/node_modules
+      - transaction-dispute-portal-api-node_modules:/workspace/api/node_modules
+      - transaction-dispute-portal-shared-node_modules:/workspace/shared/node_modules
 
     depends_on:
       transaction-dispute-portal-database:
@@ -45,7 +66,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
-      start_period: 15s
+      start_period: 90s
 
     networks:
       - transaction-dispute-portal
@@ -57,12 +78,23 @@ services:
       dockerfile: web/Dockerfile
 
     restart: unless-stopped
+    working_dir: /workspace
 
     env_file:
       - ./web/.env
 
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "100"
+
     ports:
       - "3000:3000"
+
+    volumes:
+      - .:/workspace
+      - transaction-dispute-portal-node_modules:/workspace/node_modules
+      - transaction-dispute-portal-web-node_modules:/workspace/web/node_modules
+      - transaction-dispute-portal-shared-node_modules:/workspace/shared/node_modules
 
     depends_on:
       transaction-dispute-portal-api:
@@ -77,13 +109,47 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
-      start_period: 15s
+      start_period: 90s
 
     networks:
       - transaction-dispute-portal
 
+  transaction-dispute-portal-mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+    networks:
+      transaction-dispute-portal:
+        aliases:
+          - mailpit
+
+  transaction-dispute-portal-ntfy:
+    image: binwiederhier/ntfy:latest
+    command: serve
+    restart: unless-stopped
+
+    environment:
+      NTFY_BASE_URL: http://localhost:8090
+      NTFY_LISTEN_HTTP: ":80"
+
+    ports:
+      - "8090:80"
+
+    networks:
+      transaction-dispute-portal:
+        aliases:
+          - ntfy
+
 volumes:
   transaction-dispute-portal-postgres_data:
+  transaction-dispute-portal-node_modules:
+  transaction-dispute-portal-api-node_modules:
+  transaction-dispute-portal-web-node_modules:
+  transaction-dispute-portal-shared-node_modules:
 
 networks:
   transaction-dispute-portal:

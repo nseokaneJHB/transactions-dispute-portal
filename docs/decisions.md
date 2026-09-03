@@ -283,6 +283,8 @@ One deliberate deviation from the Ubuntu Stories precedent, unrelated to the nam
 
 _Revised by decision 25:_ the single `deploy.yml` `publish` job this decision described is split into gated `staging`/`production` jobs, and a real bug in its `docker/metadata-action` usage (caught by the first actual run on GitHub, not by inspection) is fixed. See #25.
 
+_Finalised by decision 42:_ the `build.yml`/`deploy.yml` split is gone — one `build.yml` (checks + a `docker compose` smoke test), no deploy workflow. Migrations decoupled-from-boot still holds *for production* (runbook §3); the dev stack runs `migrate` on api start. See #42.
+
 ## 25. Deploy: staging (auto) / production (gated) via GitHub Environments; drop `docker/metadata-action`
 
 **Problem:** Two issues, one found by actually running the pipeline rather than by reading it. First, the bug: decision 24's single `publish` job failed on its first real run — the `Docker metadata` step errored. Root cause: `docker/metadata-action`'s `context: git` option introspects the local git checkout for branch/tag info, but the job checks out a single commit by raw SHA (`actions/checkout@v4`'s default shallow, single-ref clone), which leaves the repo in a detached-HEAD state with no branch and no history for `context: git` to read — a known failure mode for that combination, not something visible from the YAML alone. Second, a real requirement: every environment should auto-deploy except production, which needs a human to explicitly approve before an image goes out under `latest`/a release tag.
@@ -294,6 +296,8 @@ _Revised by decision 25:_ the single `deploy.yml` `publish` job this decision de
 **How it solves the problem:** Matches the actual requirement — automatic where nothing should block deployment, a real human approval gate exactly where one was asked for — using GitHub's built-in Environment protection mechanism rather than a bespoke `workflow_dispatch`-and-hope approval step. The `docker/metadata-action` removal converts a bug found in production (well, in the one CI run that counts) into a permanently smaller failure surface, verified by that fix landing before the next push.
 
 _Superseded by decision 34:_ the `production` job and the `production` GitHub Environment are removed. With no live infra (and none ever planned), a second gated tier was modelling a promotion that never happens — `staging` is the only deploy target, and it takes the `latest` tag. The `docker/metadata-action` removal and the explicit-tags-from-context approach still stand. See #34.
+
+_Finalised by decision 42:_ `staging` goes too — no image is built or pushed by CI at all now. The GitHub Environments required-reviewer pattern and the explicit-tags approach are written up in `docs/production-runbook.md` §6 for whoever wires a real pipeline. See #42.
 
 ## 26. `deploy.yml` calls `build.yml` via `workflow_call`, not `workflow_run`
 
@@ -309,6 +313,8 @@ _Revised by decision 27:_ the `tags: [v*]` push trigger this decision describes 
 
 _Narrowed by decision 34:_ the connected-graph point stands, but the graph is now `build → staging` only (the `tag` and `production` jobs are gone). See #34.
 
+_Superseded by decision 42:_ there is no `deploy.yml` any more, so nothing calls `build.yml` — it runs standalone on push/PR. The reusable-workflow reasoning is moot for this repo. See #42.
+
 ## 27. Production trigger: auto-created tag after staging succeeds, not a manual `v*` push
 
 **Problem:** Decision 26 still required Nolan to manually create and push a `v*` tag to reach production — a second, disconnected action outside the pipeline decision 26 had just made visually connected. That's backwards from the actual want: staging passing should be the trigger, with production surfacing as nothing more than a "Review deployments" approval button already sitting in the same run — no separate manual tagging step for a human to remember.
@@ -320,6 +326,8 @@ _Narrowed by decision 34:_ the connected-graph point stands, but the graph is no
 **How it solves the problem:** Matches what was actually asked: push to `main`, staging deploys automatically, a version tag appears with no manual step, and the only thing a human sees or does is click approve on `production`.
 
 _Superseded by decision 34:_ the `tag` job and the `production` job are both removed. Without a `production` promotion there's nothing for an auto-created version tag to mark, so `deploy.yml` is just `build → staging`. See #34.
+
+_Superseded by decision 42:_ `deploy.yml` is deleted outright. See #42.
 
 ## 28. Drizzle schema & Better Auth wiring: mirror the Ubuntu Stories house style, don't invent one
 
@@ -401,6 +409,8 @@ New committed env files follow the #20 pattern (every secret-shaped key blank, r
 
 _Revised by decision 34:_ the base/override split and the merge mechanics stand, but "production" becomes "staging" — there's no production tier anywhere now. Both files read the committed `./api/.env` / `./web/.env` / `./env/.env.database` directly (no `*.production` files, no `!override` on `env_file`, no `*.local` siblings). The distinct-`image:`-names gotcha still applies. See #34.
 
+_Superseded by decision 42:_ the split itself is gone — `compose.override.yml` is deleted and its dev deltas are folded into a single dev-only `compose.yml`. There is no non-dev compose shape in the repo. See #42.
+
 ## 33. Database migrations: a manually-triggered GitHub Actions workflow
 
 **Problem:** #24 built the standalone migration runner (`api/src/database/migrate.ts`) but nothing invoked it in CI/CD. A migration should be a deliberate, auditable action against a chosen environment — not automatic on deploy, and not only runnable from a laptop.
@@ -416,6 +426,8 @@ Also tweaked `api/src/database/migrate.ts`: `onnotice: () => {}` on the `postgre
 **How it solves the problem:** A migration is now one button in the Actions UI, gated and audited per environment, ready the moment a database exists.
 
 _Revised by decision 34:_ staging-only — the `staging`/`production` environment choice input is removed (`environment: staging` hardcoded, `concurrency: migrate-staging`). Everything else (the `drizzle-kit check` pre-flight, the `DATABASE_URL` guard, dormancy) is unchanged. See #34.
+
+_Superseded by decision 42:_ `migrate.yml` is deleted. The dev `compose.yml` runs `pnpm … migrate` before `… dev` on api start, so a fresh clone applies the schema with no manual step; running migrations as an approved pre-deploy step in a real pipeline is `docs/production-runbook.md` §3. See #42.
 
 ## 34. Collapse to one committed `.env` per package; drop the production tier
 
@@ -433,4 +445,144 @@ _Revised by decision 34:_ staging-only — the `staging`/`production` environmen
 
 _Known wart:_ the staging-only `docker compose -f compose.yml up` inherits `SMTP_HOST=mailpit` from `api/.env` but has no Mailpit service (that's dev-override only), so OTP sends fail there — silently, since `sendEmail` swallows transport errors (#31). Fine for a staging image sanity-check; a real deployment sets real SMTP.
 
+_Revised by decision 42:_ the "one committed `.env` per package with working local values" model this decision landed is kept and taken further — `env/.env.database` moves to `env/development/.env.database`, and the staging tier #34 still had (`deploy.yml` `build → staging`, `migrate.yml`, the `compose.yml`/`compose.override.yml` split) is all removed. The repo is now dev-only end to end; the wart above is moot (one compose file, Mailpit always present). See #42.
+
+## 35. API skeleton: mirror the Ubuntu Stories request stack, with the over-builds named and trimmed
+
+**Problem:** `docs/api.md` had a route sketch and `shared` had the response envelope (#22), but nothing on disk turned a request into a response — no app factory, no plugin registration, no module structure, no error/auth wiring. Same fork as #28: invent a fresh request stack for this repo, or reuse the one from a project already in production (Ubuntu Stories).
+
+**Decision:** Reuse the Ubuntu Stories structure, for the same reason as #28 — "consistent with a codebase already shipping" beats a bespoke shape invented for a one-month submission. Concretely:
+
+- **`build()` factory split from `app.ts`.** `src/build.ts` wires plugins + routes and returns the app short of `listen()` (so tests get an app with no open port); `src/app.ts` calls `build(logger)`, attaches `close-with-grace`, and listens. `app.ts` never imports the migration runner (#24).
+- **`middleware/index.ts` registers every cross-cutting concern in one place** — helmet, CORS, `@fastify/rate-limit` (global), `@fastify/cookie`, the zod validator/serializer compilers, the error handler, the not-found handler, the request-timing / structured-logging hooks, and the `authenticate` / `authorize` / `connection` decorators.
+- **`modules/<name>/{route,service,type}.ts` triad.** `route.ts` declares method + URL (from `shared`'s `API_PATHS`) + zod schema + `preHandler` chain; `service.ts` is the handler; `type.ts` is the `RouteGenericInterface`. `route/index.ts` mounts each module under its namespace prefix, resolved from `shared`'s `API_URLS(env.API_VERSION)` so the `/v1` prefix lives in exactly one place.
+- **`type/fastify.ts`** declares the `FastifyInstance` / `FastifyRequest` augmentation (`authenticate`, `authorize`, `connection`, `request.user`, `request.session`).
+
+Deliberate trims vs. Ubuntu Stories, each because the panel reads this repo against `CLAUDE.md`'s own no-speculative-abstraction rule, not against a codebase they can't see (full blow-by-blow in `docs/overkill-implementation.md`, enhancement follow-ups in `docs/enhance-suggestion.md`):
+
+- **No generic query DSL / repository-over-the-ORM** — deleted outright; per-module hand-written Drizzle instead (#36).
+- **No event middleware** — dropped `EVENT_NAMES`, the `X-Event-Name` header, `request.eventName`, `app.event(...)` in `preHandler`. Routes declare handler + schema only.
+- **One correlation id, not two** — `genReqId` seeds Fastify's own request id from `x-correlation-id` / `x-request-id`, logged as `correlationId` and echoed on every response. No parallel second id.
+- **No custom Pino levels** — Ubuntu Stories redefined the level set to identical values; removed, along with the now-empty `lib/constant.ts` and `type/global.ts`.
+- **Flat `readyz`** — `ready` / `503` with a 2s timeout on the `select 1` probe, not a three-state per-subsystem health model (also closes `docs/enhance-suggestion.md` #7).
+- **Better Auth's own rate limiter off** — the global `@fastify/rate-limit` plus per-route caps (#37) cover its endpoints; two limiters was two things to reason about.
+
+**Alternatives considered:** Invent a fresh request stack — rejected, same reasoning as #28. Land the skeleton as-was, DSL and all, and trim later — rejected: the DSL is the exact "repository layer with no second caller" the conventions rule names, and shipping it then removing it wastes the reviewer's attention on machinery that never earned its place.
+
+**How it solves the problem:** A request stack that looks like production code because it is that code's structure, minus the parts that only make sense at Ubuntu Stories' size — and every subtraction is written down where a "why is this different from your other project" question can find it.
+
+## 36. Data access: per-table hand-written Drizzle functions taking an `Executor`, not a query builder
+
+**Problem:** #35 deleted Ubuntu Stories' generic `core` query DSL (`server.core.story.many({ where, select, order, page, ... })`). Query code still needs *somewhere* to live — inline in each service, or a thin seam of its own.
+
+**Decision:** `api/src/database/repository/<table>.ts` — one file per table, each exporting plain arrow functions that write the Drizzle query by hand (`recordAuthEvent(executor, record)`), re-exported from `repository/index.ts`. Every function takes an `Executor` as its first argument — `database/executor.ts` types it as `typeof connection | Transaction`, i.e. the pooled connection or an open transaction handle — so the *caller* decides transaction scope and the same function works inside or outside one. Modules import from `repository/`, never from each other.
+
+**Alternatives considered:** Keep the generic DSL — rejected (#35): an ORM over the ORM with, at deletion time, zero real callers. Inline Drizzle directly in each `service.ts` — rejected: `CLAUDE.md` wants query/type logic centralized rather than scattered per-route, and a named repository function is the seam an integration test can point at a rolled-back transaction. A full repository *class* / DI container — rejected per the no-speculative-abstraction rule; these are just functions.
+
+**How it solves the problem:** The query layer is a flat list of named functions a reader can scan in one pass, with transaction control pushed to the caller via the `Executor` parameter — the one piece of structure that pays for itself immediately (the auth module already opens no transaction; the dispute module will).
+
+## 37. Auth module: wrap Better Auth's server API in our own routes, don't mount its HTTP handler
+
+**Problem:** Better Auth ships a catch-all handler you can mount at `/v1/auth/*` and be done. But then login responses wouldn't match `shared`'s envelope (#22), there'd be no `auth_audit_log` trail (`docs/domain-model.md`), and Better Auth's built-in rate limiting would be the login-abuse story instead of one we chose.
+
+**Decision:** `modules/authentication/` defines three explicit routes — `POST /v1/auth/otp`, `POST /v1/auth/otp/verify`, `POST /v1/auth/sign-out` — whose services call `auth.api.*` through `lib/authentication.ts` and then own the rest: shape the result into the `shared` envelope, forward Better Auth's `Set-Cookie` headers verbatim, write an `AUTH_EVENT` row via `repository/auth-audit-log.ts` (`OTP_REQUESTED` on request; `LOGIN_SUCCESS` with `user_id` / `LOGIN_FAILURE` / `OTP_LOCKED` on verify, distinguished by inspecting Better Auth's response), and carry a per-route rate limit derived from `shared`'s `OTP` constant (`MAX_ATTEMPTS`/min on request; `2 × MAX_ATTEMPTS`/min on verify, loose enough that Better Auth's own 5-attempts-per-code lockout is what a fat-fingering user hits, not a 429). `/v1/auth/otp` responds identically whether or not the account exists — no user-probing. `emailAndPassword` is off; Better Auth's own rate limiter is off (#35).
+
+**Alternatives considered:** Mount Better Auth's handler as-is — rejected for the three gaps above (envelope, audit trail, rate-limit ownership). Put the audit-log write inside `lib/authentication.ts` rather than the service — rejected: the service already has `request.ip` / `user-agent` / the parsed Better Auth response in hand, and `lib/` shouldn't reach for the repository.
+
+**How it solves the problem:** Login, verify, and sign-out return the same envelope as every other endpoint, every attempt lands in `auth_audit_log` keyed by email (#28), and the rate-limit story is one we can point at and explain — at the cost of ~140 lines of service code wrapping calls Better Auth would otherwise handle itself. Verified end to end against Postgres + Mailpit (see the commit message for the exact trace).
+
+## 38. Dates: `date-fns`
+
+**Problem:** Date math was about to start (seed spread over months; dispute-resolve timestamps; `from`/`to` range filters) with raw `Date` mutation (`d.setMonth(d.getMonth() - 14)`) as the default.
+
+**Decision:** `date-fns` is the date library from here. It operates on native `Date` — exactly what Drizzle's `timestamp` columns and `faker.date.*` already return — so there's no wrapper type at the DB boundary (unlike luxon's `DateTime`); it's function-based and tree-shakeable, matching the repo's arrow-function style. `new Date()` for "now" stays fine. First use: `subMonths(now, 14)` in the seed.
+
+**Alternatives considered:** luxon — richer, but its `DateTime` wrapper means converting at every DB read/write. Raw `Date` mutation — error-prone and the thing this decision exists to stop. dayjs — smaller, but mutable-by-default plugins and a less explicit API.
+
+**How it solves the problem:** One immutable, native-`Date`-in/out helper set for every date operation, no boundary conversions.
+
+## 39. Customer data scoping: the owner filter is in the query, and a miss is a 404 not a 403
+
+**Problem:** `docs/domain-model.md`'s authz NFR — "a customer only ever reads/acts on their own transactions and disputes" — needs a concrete shape in the first module that reads customer data (`transactions`). Two sub-questions: where does the ownership check live, and what does a cross-owner request return?
+
+**Decision:**
+
+- **The `user_id = :caller` predicate is part of every customer query itself**, not a separate `if (row.user_id !== user.id)` check after a fetch. `findUserTransactionById(executor, { id, userId })` filters on both columns; `findTransactionsByUser` filters on `user_id` before paginating. There is no code path that loads a row and *then* decides whether the caller may see it — the database never returns another user's row in the first place.
+- **A row that exists but isn't the caller's returns `404`, identical to a row that doesn't exist** — never `403`. A `403` on someone else's id confirms that id is real; a uniform `404` leaks nothing. (A malformed id is a `422` from the UUID params schema — a different class, a client error in the request itself.)
+- **Route-level `authorize(CUSTOMER)`** on top: an `ADMIN` session on a `/v1/transactions*` route is a `403`. The admin surface is its own namespace (`docs/decisions.md` #16); the customer API is not a second way in for an admin.
+
+**Alternatives considered:** Fetch-then-check ownership in the service — rejected: it works, but it puts a row the caller may not see into application memory and makes the guard a thing every handler must remember rather than a property of the query. `403` for a cross-owner request — rejected: it's the "correct" status in the abstract, but it's also an existence oracle for enumerable-looking ids; the DoD's own wording ("can't read another user's data") is about non-disclosure, and `404` discloses less.
+
+**How it solves the problem:** The authz guarantee is enforced one layer down from the handler — in the `repository/` query — so a new customer endpoint gets it by using the scoped repository function, not by re-implementing a check. And the response shape gives an attacker with a stolen id no signal about whether it's valid.
+
+## 40. Dispute submission: the DB is the one-open-dispute guard, not an application pre-check
+
+**Problem:** `docs/api.md`'s `POST /v1/disputes` line asks for an idempotent submit — "reject with a clear error if the transaction already has an open dispute", and "treat a duplicate idempotency key as a no-op". Two ways to build the one-open-dispute-per-transaction rule: a `SELECT … WHERE status IN (open)` before every insert, or let the database reject it.
+
+**Decision:** No pre-check query, no `Idempotency-Key` header, no new column. The partial unique index from #4/#28 (`dispute_open_per_transaction_uq_idx` on `transaction_id WHERE status IN ('SUBMITTED','UNDER_REVIEW')`) is the entire mechanism. `createDispute` just inserts; a second open dispute hits the index and Postgres raises `23505`. `middleware/error.ts` catches it — `DrizzleQueryError` (drizzle 0.45 wraps the driver error; the `postgres`-js `code`/`detail`/`constraint_name` live on `.cause`) with `code === "23505"` → `409` + a domain-neutral message. The service has no `try`/`catch`; the global handler owns it.
+
+`GET /v1/disputes` and `GET /v1/disputes/:disputeId` follow #39 exactly — owner filter in the `repository/dispute.ts` query, a cross-owner or missing row is a `404`, a malformed id a `422`. The wire schema omits `user_id` (always the caller) and `resolved_by` (internal), excluded from the query itself per #43.
+
+**Alternatives considered:** Pre-check with a `SELECT` — rejected: it's a TOCTOU race (two concurrent submits both pass the check, both insert), so you need the unique index anyway, at which point the `SELECT` is redundant work on every call. An `Idempotency-Key` header + table — rejected: real machinery for a problem the DB constraint already solves; the "duplicate key is a no-op" phrasing in api.md predates the partial index and is satisfied by "duplicate open dispute is a clean 409". Catching `23505` in the service — rejected: error-to-envelope mapping is the global handler's job (#35), and every module would repeat it.
+
+**How it solves the problem:** One writer of the rule (the migration), one place it's enforced (Postgres), one place the error becomes a response (`middleware/error.ts`). Verified: 5 parallel `POST /v1/disputes` for one transaction → exactly one `201`, four `409`, one dispute row, one audit row, no "Unhandled error" log.
+
+## 41. Dispute lifecycle: forward-only, each transition guarded inside the `UPDATE … WHERE`
+
+**Problem:** `docs/domain-model.md` states the lifecycle as `SUBMITTED → UNDER_REVIEW → RESOLVED | REJECTED`, but `docs/api.md`'s admin section only sketched a review *list* and a *resolve* action — nothing moved a dispute into `UNDER_REVIEW`, so requiring resolve to run from that state would strand every dispute, and allowing resolve straight from `SUBMITTED` would make `UNDER_REVIEW` a state nothing uses. Also: where does the "is this transition legal" check live, given #40 just established that pre-checks race.
+
+**Decision:**
+
+- **Add `POST /v1/admin/disputes/:disputeId/review`** (`SUBMITTED → UNDER_REVIEW`) alongside `.../resolve` (`UNDER_REVIEW → RESOLVED | REJECTED`). `resolve` **requires `UNDER_REVIEW`** — resolving a still-`SUBMITTED` dispute is a `409` ("move it to review first"). So every closed dispute carries a full `SUBMITTED → UNDER_REVIEW → terminal` chain in `dispute_audit_log`, and "a reviewer looked before deciding" is a real control, not an honour system.
+- **The legal-from-status check is the `UPDATE`'s `WHERE` clause**, not a prior `SELECT`: `markDisputeUnderReview` is `UPDATE … SET status = 'UNDER_REVIEW' WHERE id = $1 AND status = 'SUBMITTED' RETURNING *`; `resolveDispute` likewise with `WHERE … AND status = 'UNDER_REVIEW'`. An empty `RETURNING` means the row wasn't in the expected state — the caller returns `409`. A cheap pre-read still runs first, only to distinguish `404` (no such dispute) from `409` (wrong state) and to give a friendlier message for the common already-closed case. Concurrent calls collapse to one write + one audit row (verified: 8 parallel `review`s → exactly one audit row).
+- **`review` is idempotent** — a second call on an already-`UNDER_REVIEW` dispute is a `200` no-op, not a `409`.
+- **No `reviewer_id` on the dispute.** `UNDER_REVIEW` is a status flag; any admin can resolve any dispute in that state. Assignment/claiming is not modelled — the brief's admin portal is "minimal by design" (#16).
+- Status-change notifications (`docs/notifications.md`) fire on `review` and `resolve` alike — the per-user ntfy topic gets `UNDER_REVIEW` / `RESOLVED` / `REJECTED` as the message body.
+- Wire values `RESOLVED` / `REJECTED` for the resolve body come from a new `TERMINAL_DISPUTE_STATUS` shared constant via `disputeResolutionSchema`, mirroring `OPEN_DISPUTE_STATUS`.
+
+Route-path plumbing folded in with the dispute modules: the `PUBLIC` API namespace is renamed `CUSTOMER` (every route under it is `authorize(CUSTOMER)`-gated, so "public" misled; it now lines up 1:1 with `USER_ROLE.CUSTOMER` and the sibling `ADMIN` namespace — URL mapping unchanged), and the inlined per-resource `{ transactionId: uuidSchema }` param schema becomes a shared `uuidParamsSchema(key)` factory + `UuidParams<Key>` type, reused for `:transactionId` and `:disputeId`.
+
+**Alternatives considered:** Allow `resolve` from any open status, `review` optional — rejected: makes `review` skippable, so the audit chain isn't guaranteed and `UNDER_REVIEW` is decorative. Add a full `SUBMITTED → UNDER_REVIEW` *and* backward `UNDER_REVIEW → SUBMITTED` / reopen edges now — deferred: the forward-only machine keeps audit and "time in state" metrics clean and matches the minimal-portal scope; the real-world edge cases (customer with new evidence after a `REJECTED`, admin declining a review, customer withdrawal, supervisor override) are worth a deliberate pass rather than a guess — see the open item at the end of this file. A state-machine table / library — rejected per the no-speculative-abstraction rule for a 4-state, 2-endpoint lifecycle.
+
+**How it solves the problem:** The lifecycle in `domain-model.md` is now real end to end, every transition is concurrency-safe by construction (the guard and the write are one statement), and the audit log tells the whole story of any dispute without inference.
+
+## 42. One dev-only environment; productionising the repo is a runbook, not a pipeline
+
+**Problem:** #24–#27 built a `build → staging` (once `→ tag → production`) GitHub Actions pipeline; #32 split `compose.yml` (a non-dev base) from `compose.override.yml` (dev deltas); #33 added a manual `migrate.yml`; #34 trimmed all of that to "staging only" but kept the shape. By explicit instruction: this repo is not going to production and never will (`CLAUDE.md`), a promotion panel is the entire audience, and every one of those pieces is machinery modelling a deploy that doesn't exist. A fresh clone should be `docker compose up` and nothing else.
+
+**Decision:**
+
+- **One `compose.yml`.** `compose.override.yml` is deleted and its dev deltas (bind mounts, `tsx`/`vite` watch, CHOKIDAR polling, published `5432`, 90s healthcheck `start_period`, Mailpit) fold into it. It also carries the `ntfy` service (`docs/notifications.md`). There is no non-dev compose shape in the repo.
+- **One `Dockerfile` per package.** The multi-stage production `api/Dockerfile` / `web/Dockerfile` are deleted; `Dockerfile.dev` → `Dockerfile` (full workspace install, runs the dev server against bind-mounted source). Explanatory comments stripped to match the no-comments house rule.
+- **Migrations run on api start.** `compose.yml`'s api `command:` is `pnpm … migrate && pnpm … dev`, so a clean clone (or a wiped volume) comes up with the schema applied. `db:seed` stays a separate one-shot (`docker compose exec …`). This is safe *because* it's a disposable dev database — production keeps migrations a gated, standalone step (runbook §3), the thing #24 was right about.
+- **`env/.env.database` → `env/development/.env.database`.** The "one committed `.env` per package, working local values" model from #34 is unchanged otherwise.
+- **CI (`build.yml`) is checks + a smoke test.** `lint`/`typecheck`/`build`/`test`, then a second job that does `docker compose up -d --build --wait`, hits `/healthz`, runs `db:seed`. `deploy.yml` and `migrate.yml` are deleted.
+- **`docs/production-runbook.md`** is the new home for everything removed: multi-stage image reference, orchestrator-injected secrets, migrations as an approved pre-deploy step, a registry-push + gated-deploy pipeline (with the GitHub Environments required-reviewer pattern from #25), k8s manifests with probes wired to `/healthz` + `/readyz`, the load-test number. Added to `CLAUDE.md`'s "Read first".
+
+**Alternatives considered:** Keep #34's staging tier as-is — rejected: it builds and pushes an image nobody deploys, and "staging" with no production is a name for "the only tier". Keep the `compose.yml`/`override.yml` split for a "production-shaped" local run — rejected: that run already had the known SMTP wart (#34), and its only value was rehearsing a deploy that isn't happening; a written runbook communicates the same understanding to the panel without the maintenance surface. Auto-seed on start too — rejected: the seed truncates first, so every `compose up` (including a plain restart) would wipe working data; migrate is idempotent, seed is not.
+
+**How it solves the problem:** `git clone && docker compose up -d` is the whole setup, CI proves exactly that path works, and the production story is told once, completely, in a document — where a "how would you actually ship this?" interview question can find it — instead of being half-modelled across six workflow and compose files that each need a "this doesn't really deploy anywhere" caveat.
+
+## 43. Repository reads: exclude columns with `getTableColumns` rest-spread
+
+**Problem:** The customer-facing dispute and transaction queries must not expose `user_id` / `resolved_by`. The first cut hand-listed the ~9 wanted columns in a `COLUMNS` object per repo; a hand-list drifts from the schema when a column is added. A follow-up cut kept `SELECT *` and narrowed the return type with `Omit<…>` — but the database still returns every column over the wire, which isn't the point.
+
+**Decision:** `const { user_id, resolved_by, ...CUSTOMER_COLUMNS } = getTableColumns(DisputeModel)` (drizzle's `getTableColumns` returns the full column map), then `.select(CUSTOMER_COLUMNS)`. The exclusion is expressed as "everything except these", derived from the table so a new column is included automatically, and it's a real projection — the emitted SQL lists only the kept columns (verified against Postgres statement logging). `eslint.config.js` gains `@typescript-eslint/no-unused-vars: { ignoreRestSiblings: true }` so the discarded destructure bindings don't trip the linter. Admin/internal reads that genuinely need every column keep a bare `.select()` returning `XModelSelect`. `CLAUDE.md`'s Drizzle convention line is updated to this.
+
+Also in this cleanup: `executor.$count(table, where)` replaces the `select({ value: count() })` + `[tally]` destructure for pagination totals; `REVIEW_COLUMNS` / `DisputeReviewRow` are deleted (they enumerated every column, so the derived type was just `DisputeModelSelect`).
+
+**Alternatives considered:** Hand-listed `COLUMNS` — rejected: silently wrong when the schema grows. `SELECT *` + `Omit` in the type only — rejected: the wire payload and query still carry the excluded columns; the type is a fig leaf. Drizzle's relational query API (`db.query.x.findMany({ columns: { user_id: false } })`) — rejected: this repo removed the relational/DSL layer (#35/#36) and uses core `.select()`.
+
+**How it solves the problem:** The projection is a one-line "all but these", it follows the schema, and it's enforced in SQL — not just in TypeScript.
+
 <!-- Open / unresolved — add an entry above once decided: -->
+<!--
+Dispute-lifecycle edge cases (raised while building #41, not yet decided): the
+lifecycle is forward-only today. Real-world scenarios to design deliberately
+before calling it done — customer with new evidence after a REJECTED (fresh
+dispute? explicit /reopen?); admin starts a review then can't/won't finish it
+(send back to SUBMITTED? a /release? does that need reviewer_id?); customer
+withdrawal of a mistaken dispute (a WITHDRAWN terminal state?); supervisor
+override of a wrongly-resolved dispute; whether any backward move should
+notify the customer. domain-model.md documents the plain forward chain.
+-->

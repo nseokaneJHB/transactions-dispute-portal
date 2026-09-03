@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins";
 
-import { USER_ROLE } from "@transaction-dispute-portal/shared";
+import { OTP, USER_ROLE, API_URLS } from "@transaction-dispute-portal/shared";
 
 import * as schema from "../database/schema/index.js";
 
@@ -13,13 +13,12 @@ import { env } from "./env.js";
 import { sendEmail } from "./mailer.js";
 import { generateUuid } from "./util.js";
 
-const OTP_EXPIRATION_SECONDS = 60 * 10;
-const OTP_MAX_ATTEMPTS = 5;
+const OTP_EXPIRATION_SECONDS = OTP.EXPIRY_MINUTES * 60;
 
 export const auth = betterAuth({
 	baseURL: env.API_URL,
 	secret: env.BETTER_AUTH_SECRET,
-	basePath: `/${env.API_VERSION}/auth`,
+	basePath: API_URLS(env.API_VERSION).AUTH,
 	trustedOrigins: env.CORS_ORIGIN,
 
 	database: drizzleAdapter(connection, {
@@ -49,8 +48,7 @@ export const auth = betterAuth({
 		additionalFields: {
 			role: {
 				input: false,
-				type: "string",
-				required: false,
+				type: Object.values(USER_ROLE),
 				defaultValue: USER_ROLE.CUSTOMER,
 			},
 		},
@@ -104,28 +102,24 @@ export const auth = betterAuth({
 
 	plugins: [
 		emailOTP({
-			otpLength: 6,
 			storeOTP: "hashed",
 			disableSignUp: true,
+			otpLength: OTP.LENGTH,
 			expiresIn: OTP_EXPIRATION_SECONDS,
-			allowedAttempts: OTP_MAX_ATTEMPTS,
+			allowedAttempts: OTP.MAX_ATTEMPTS,
 			sendVerificationOTP: async ({ email, otp }) => {
 				await sendEmail(
 					buildOtpEmailSignInRequest({
 						otp,
 						email,
-						expiresInMinutes: OTP_EXPIRATION_SECONDS / 60,
+						expiresInMinutes: OTP.EXPIRY_MINUTES,
 					}),
 				);
 			},
 		}),
 	],
 
-	rateLimit: {
-		enabled: true,
-		max: env.RATE_LIMIT_MAX,
-		window: env.RATE_LIMIT_WINDOW,
-	},
+	rateLimit: { enabled: false },
 
 	advanced: {
 		cookiePrefix: "transaction-dispute-portal",
