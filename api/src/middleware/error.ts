@@ -24,6 +24,8 @@ interface PostgresDriverError extends Error {
 const CONFLICT_MESSAGE: Record<string, string> = {
 	dispute_open_per_transaction_uq_idx:
 		"This transaction already has an open dispute.",
+	user_email_uq_idx: "An account already exists for that email.",
+	user_email_unique: "An account already exists for that email.",
 };
 
 /** Central error handler — maps known errors onto the shared response envelope. */
