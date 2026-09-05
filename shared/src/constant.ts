@@ -12,6 +12,8 @@ export const OTP = {
 	MAX_ATTEMPTS: 5,
 } as const;
 
+export const ADMIN_INVITE_EXPIRY_HOURS = 72 as const;
+
 export const USER_ROLE = {
 	ADMIN: "ADMIN",
 	CUSTOMER: "CUSTOMER",
@@ -65,6 +67,7 @@ export const FRONTEND_URLS = {
 	DISPUTES: "/disputes",
 	TRANSACTIONS: "/transactions",
 	ADMIN: "/admin",
+	ADMIN_INVITE_ACCEPT: "/admin/invite",
 } as const;
 
 export type FrontendRedirectUrlPaths = typeof FRONTEND_URLS;

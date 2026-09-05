@@ -7,6 +7,7 @@ import { route as authRoute } from "../modules/authentication/route.js";
 import { route as transactionRoute } from "../modules/transaction/route.js";
 import { route as disputeRoute } from "../modules/dispute/route.js";
 import { route as adminDisputeRoute } from "../modules/admin-dispute/route.js";
+import { route as adminInviteRoute } from "../modules/admin-invite/route.js";
 
 import { env } from "../lib/env.js";
 
@@ -19,4 +20,5 @@ export const route = async (app: FastifyInstance): Promise<void> => {
 	await app.register(transactionRoute, { prefix: CUSTOMER });
 	await app.register(disputeRoute, { prefix: CUSTOMER });
 	await app.register(adminDisputeRoute, { prefix: ADMIN });
+	await app.register(adminInviteRoute, { prefix: ADMIN });
 };
