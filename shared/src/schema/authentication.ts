@@ -23,3 +23,19 @@ export const authOtpVerifyBodySchema = z.object({
 		)
 		.describe(`The ${OTP.LENGTH}-digit code from the sign-in email`),
 });
+
+/**
+ * Body for `POST /v1/auth/change-email` — the signed-in user asks to move their
+ * sign-in email. An approval link goes to the current address first.
+ */
+export const authChangeEmailBodySchema = z.object({
+	newEmail: emailSchema,
+});
+
+/**
+ * Body for `POST /v1/auth/change-email/confirm` — a token from either the
+ * approval email (old address) or the verification email (new address).
+ */
+export const authChangeEmailConfirmBodySchema = z.object({
+	token: stringSchema.min(1, "A confirmation token is required."),
+});

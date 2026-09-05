@@ -21,14 +21,14 @@ Decision 1 originally rejected email-OTP specifically because it puts outbound e
 
 **Production:** real per-recipient isolation isn't something to configure into Mailpit — it's inherent to not using Mailpit at all. Swap `SMTP_HOST`/`PORT`/`USER`/`PASS` (provider-agnostic already, decisions 14/19) for a real transactional provider and every user's OTP goes to *their own* real inbox, gated by their own email login. Zero code change, an env-var swap in a real deployment's config — documented here, not built, since this submission has no production deployment to point it at.
 
-## 3. Account-recovery & compromise alerts — build this, via outbound SMTP
+## 3. Account-recovery & compromise alerts — built, via outbound SMTP
 
-Different from OTP delivery itself: this is a **notification**, not the login gate — if the mail provider is slow or briefly down, an alert arrives late, it never blocks logging in (logging in already depends on mail delivery for a different reason, per section 2 above; this is additional, non-blocking traffic on top of that).
+Different from OTP delivery itself: these are **notifications**, not the login gate — if the mail provider is slow or briefly down, an alert arrives late, it never blocks logging in (logging in already depends on mail delivery for a different reason, per section 2 above; this is additional, non-blocking traffic on top of that).
 
 Built:
 
-- **New-device/new-location login alert** — sent (async, non-blocking) on a login from an unrecognized session fingerprint. The primary way a compromised account would actually get noticed, now that "compromised" means "someone else can receive your OTP codes."
-- **Email-changed confirmation** — sent to the _old_ address when the account email changes, so an attacker who does get in can't quietly redirect where future OTP codes go without the real owner finding out.
+- **New-device login alert** — a Better Auth `databaseHooks.session.create.after` hook (`lib/security-notifications.ts`) fires an email (async, `void`-ed, never awaited into the login response) when a session is created from a `user_agent` the account has no earlier session for. A missing `user_agent` is skipped — it can't be matched against history and only non-browser clients omit it. Seed data gives the demo accounts a known-device session so the "quiet on a known device, alert on a new one" behaviour is demonstrable. This is the primary way a compromised account gets noticed, now that "compromised" means "someone else can receive your OTP codes."
+- **Email-change approval to the _old_ address** — `POST /v1/auth/change-email` (`{ newEmail }`, authenticated) wraps Better Auth's `changeEmail`. Nothing changes immediately: an approval link goes to the account's **current** address (`user.changeEmail.sendChangeEmailConfirmation`), then a verification link to the new one (`emailVerification.sendVerificationEmail`); `POST /v1/auth/change-email/confirm` (`{ token }`) applies each step. So an attacker with a live session still can't quietly redirect where OTP codes go — the real owner gets an approval request they have to act on. The response to `change-email` is identical whether or not the target address already exists (no account probing).
 
 There is no separate recovery credential: email access *is* the credential. If someone loses access to their email, there's no self-service recovery path — a real, accepted limitation, documented here rather than built (`docs/decisions.md` #14's narrowing note).
 

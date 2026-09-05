@@ -11,6 +11,8 @@ import {
 	signOut,
 	sendSignInOtp,
 	verifySignInOtp,
+	requestEmailChange as requestEmailChangeApi,
+	confirmEmailChange as confirmEmailChangeApi,
 } from "../../lib/authentication.js";
 
 import { recordAuthEvent } from "../../database/repository/index.js";
@@ -19,6 +21,8 @@ import type {
 	SignOutRequest,
 	RequestOtpRequest,
 	VerifyOtpRequest,
+	ChangeEmailRequest,
+	ConfirmEmailChangeRequest,
 } from "./type.js";
 
 const TOO_MANY_ATTEMPTS_CODE = "TOO_MANY_ATTEMPTS";
@@ -108,6 +112,45 @@ export const verifyOtp = async (
 			? "Too many incorrect attempts — that code is now void. Request a new one."
 			: "That code is invalid or has expired. Request a new one.",
 		redirectUrl: signInRedirect(email),
+	});
+};
+
+/** `POST /v1/auth/change-email` — start moving the signed-in user's sign-in email. */
+export const changeEmail = async (
+	request: FastifyRequest<ChangeEmailRequest>,
+	reply: FastifyReply<ChangeEmailRequest>,
+): Promise<void> => {
+	const { newEmail } = request.body;
+
+	await requestEmailChangeApi(request.headers, { newEmail });
+
+	const { status, code } = HTTP_RESPONSE_CODE.OK;
+	return reply.status(status).send({
+		code,
+		message:
+			"If that address is available, we've emailed an approval link to your current address. The change only takes effect once you follow it.",
+	});
+};
+
+/** `POST /v1/auth/change-email/confirm` — apply one step of an email change from its token. */
+export const confirmEmailChange = async (
+	request: FastifyRequest<ConfirmEmailChangeRequest>,
+	reply: FastifyReply<ConfirmEmailChangeRequest>,
+): Promise<void> => {
+	const result = await confirmEmailChangeApi(request.body.token);
+
+	if (!result.ok) {
+		const { status, code } = HTTP_RESPONSE_CODE.UNAUTHENTICATED;
+		return reply.status(status).send({
+			code,
+			message: "That link is invalid or has expired. Start the change again.",
+		});
+	}
+
+	const { status, code } = HTTP_RESPONSE_CODE.OK;
+	return reply.status(status).send({
+		code,
+		message: "Email change confirmed.",
 	});
 };
 

@@ -13,6 +13,8 @@ Our own routes wrapping the Better Auth server API, so login carries the shared 
 - `POST /v1/auth/otp` — body: `email`. Sends a one-time code. Response is identical whether or not the account exists (no user probing). Writes `OTP_REQUESTED`.
 - `POST /v1/auth/otp/verify` — body: `email`, `otp`. Exchanges the code for a session; forwards `Set-Cookie`. Writes `LOGIN_SUCCESS` / `LOGIN_FAILURE` / `OTP_LOCKED`.
 - `POST /v1/auth/sign-out` — ends the session; safe to call without one.
+- `POST /v1/auth/change-email` — **built.** Body: `newEmail`. Authenticated. Wraps Better Auth's `changeEmail`; an approval link goes to the account's *current* address first (`docs/auth.md` §3). Response is identical whether or not `newEmail` already exists.
+- `POST /v1/auth/change-email/confirm` — **built.** Body: `token` (from the approval email, then the verification email). Applies one step of the change; a bad or expired token is a `401`.
 
 ## Public, customer-authenticated (Better Auth session — email-OTP login, `docs/decisions.md` #21)
 

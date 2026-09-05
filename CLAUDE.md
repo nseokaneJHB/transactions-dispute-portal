@@ -47,7 +47,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 ## Explicitly out of scope
 
 - No real transaction/banking integration — data is seeded/simulated
-- No real delivery of _dispute-status_ notifications — simulated via self-hosted ntfy, see `docs/notifications.md` (no third-party ntfy.sh). Auth-related email (account-recovery/compromise alerts) is real, see `docs/auth.md` §3 — different category, not a contradiction
+- No real delivery of _dispute-status_ notifications — simulated via self-hosted ntfy, see `docs/notifications.md` (no third-party ntfy.sh). Auth email is real over SMTP — the OTP sign-in code, plus the new-device login alert and email-change approval (`docs/auth.md` §3) — different category, not a contradiction
 - No Google OAuth — no social login. Email-OTP login is still self-hosted-only (no external *identity provider*), but it does depend on outbound SMTP delivery working on the login path itself — a real, accepted dependency, not the OAuth-shaped one this line originally ruled out (`docs/auth.md`, `docs/decisions.md` #21)
 - No live cloud deployment
 - Admin portal is minimal by design — one or two pages (dispute review list + resolve action), invite-only account creation, no self-service admin signup (`docs/decisions.md` #16). Not a general back-office; the brief is still customer-facing first

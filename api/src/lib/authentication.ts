@@ -42,3 +42,27 @@ export const signOut = async (
 		headers: fromNodeHeaders(headers),
 		asResponse: true,
 	});
+
+/**
+ * Start an email change for the signed-in user. Better Auth emails an approval
+ * link to the *current* address; nothing changes until it is followed. The
+ * response is the same whether or not `newEmail` is already taken.
+ */
+export const requestEmailChange = async (
+	headers: FastifyRequest["headers"],
+	payload: { newEmail: string },
+): Promise<{ status: boolean }> =>
+	await auth.api.changeEmail({
+		headers: fromNodeHeaders(headers),
+		body: { newEmail: payload.newEmail },
+	});
+
+/**
+ * Complete an email-change step from a token in one of the two emails —
+ * approval from the old address, then verification from the new one.
+ */
+export const confirmEmailChange = async (token: string): Promise<Response> =>
+	await auth.api.verifyEmail({
+		query: { token },
+		asResponse: true,
+	});

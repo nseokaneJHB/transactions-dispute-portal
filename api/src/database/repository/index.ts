@@ -1,4 +1,5 @@
 export * from "./auth-audit-log.js";
+export * from "./session.js";
 export * from "./user.js";
 export * from "./transaction.js";
 export * from "./dispute.js";
