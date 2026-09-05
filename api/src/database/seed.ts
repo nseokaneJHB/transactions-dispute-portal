@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-import { subMonths } from "date-fns";
+import { addDays, subMonths } from "date-fns";
 
 import { faker } from "@faker-js/faker";
 
@@ -14,6 +14,7 @@ import {
 
 import {
 	UserModel,
+	SessionModel,
 	DisputeModel,
 	TransactionModel,
 	DisputeAuditLogModel,
@@ -41,6 +42,9 @@ const FAKER_SEED = 20260830;
 const ADMIN = { name: "Nolan Seokane", email: "thelowlydev@gmail.com" };
 const DEMO_CUSTOMER_EMAIL = "customer@example.com";
 const NEWCOMER_EMAIL = "newcomer@example.com";
+
+const KNOWN_DEVICE_USER_AGENT =
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 
 const CUSTOMER_COUNT = 30;
 const DEMO_TRANSACTIONS = 400;
@@ -212,6 +216,17 @@ const seed = async (): Promise<void> => {
 		const regulars = users.filter(
 			({ id, role }) =>
 				role === USER_ROLE.CUSTOMER && id !== demo.id && id !== newcomer.id,
+		);
+
+		await database.insert(SessionModel).values(
+			[admin, demo].map((user) => ({
+				user_id: user.id,
+				token: faker.string.alphanumeric(48),
+				ip_address: faker.internet.ipv4(),
+				user_agent: KNOWN_DEVICE_USER_AGENT,
+				expires_at: addDays(now, 7),
+				created_at: faker.date.recent({ days: 20, refDate: now }),
+			})),
 		);
 
 		const transactionRows: TransactionModelInsert[] = [];

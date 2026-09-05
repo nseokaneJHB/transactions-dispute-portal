@@ -14,6 +14,8 @@ export const OTP = {
 
 export const ADMIN_INVITE_EXPIRY_HOURS = 72 as const;
 
+export const EMAIL_CHANGE_TOKEN_EXPIRY_MINUTES = 30 as const;
+
 export const USER_ROLE = {
 	ADMIN: "ADMIN",
 	CUSTOMER: "CUSTOMER",
@@ -75,6 +77,7 @@ export const FRONTEND_URLS = {
 	TRANSACTIONS: "/transactions",
 	ADMIN: "/admin",
 	ADMIN_INVITE_ACCEPT: "/admin/invite",
+	CONFIRM_EMAIL_CHANGE: "/account/email-change",
 } as const;
 
 export type FrontendRedirectUrlPaths = typeof FRONTEND_URLS;
@@ -176,6 +179,8 @@ export const API_PATHS = {
 	AUTH_OTP_REQUEST: "/otp",
 	AUTH_OTP_VERIFY: "/otp/verify",
 	AUTH_SIGN_OUT: "/sign-out",
+	AUTH_CHANGE_EMAIL: "/change-email",
+	AUTH_CHANGE_EMAIL_CONFIRM: "/change-email/confirm",
 
 	TRANSACTIONS: "/transactions",
 	TRANSACTION_DETAIL: "/transactions/:transactionId",

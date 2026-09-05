@@ -4,6 +4,8 @@ import type {
 	GlobalResponse,
 	AuthOtpRequestBody,
 	AuthOtpVerifyBody,
+	AuthChangeEmailBody,
+	AuthChangeEmailConfirmBody,
 } from "@transaction-dispute-portal/shared";
 
 export interface RequestOtpRequest extends RouteGenericInterface {
@@ -13,6 +15,16 @@ export interface RequestOtpRequest extends RouteGenericInterface {
 
 export interface VerifyOtpRequest extends RouteGenericInterface {
 	Body: AuthOtpVerifyBody;
+	Reply: GlobalResponse;
+}
+
+export interface ChangeEmailRequest extends RouteGenericInterface {
+	Body: AuthChangeEmailBody;
+	Reply: GlobalResponse;
+}
+
+export interface ConfirmEmailChangeRequest extends RouteGenericInterface {
+	Body: AuthChangeEmailConfirmBody;
 	Reply: GlobalResponse;
 }
 

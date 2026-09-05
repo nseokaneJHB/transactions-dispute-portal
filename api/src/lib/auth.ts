@@ -2,18 +2,34 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins";
 
-import { OTP, USER_ROLE, API_URLS } from "@transaction-dispute-portal/shared";
+import {
+	OTP,
+	USER_ROLE,
+	API_URLS,
+	FRONTEND_URLS,
+	EMAIL_CHANGE_TOKEN_EXPIRY_MINUTES,
+} from "@transaction-dispute-portal/shared";
 
 import * as schema from "../database/schema/index.js";
 
 import { buildOtpEmailSignInRequest } from "../email/otp-email-sign-in-request.js";
+import { buildEmailVerificationEmail } from "../email/email-verification.js";
+import { buildEmailChangeApprovalEmail } from "../email/email-change-approval.js";
 
 import { connection } from "../database/config.js";
 import { env } from "./env.js";
 import { sendEmail } from "./mailer.js";
+import { alertOnNewDeviceLogin } from "./security-notifications.js";
 import { generateUuid } from "./util.js";
 
 const OTP_EXPIRATION_SECONDS = OTP.EXPIRY_MINUTES * 60;
+const EMAIL_CHANGE_TOKEN_EXPIRATION_SECONDS =
+	EMAIL_CHANGE_TOKEN_EXPIRY_MINUTES * 60;
+
+const emailChangeUrl = (token: string): string =>
+	`${env.FRONTEND_URL}${FRONTEND_URLS.CONFIRM_EMAIL_CHANGE}?${new URLSearchParams(
+		{ token },
+	).toString()}`;
 
 export const auth = betterAuth({
 	baseURL: env.API_URL,
@@ -34,6 +50,19 @@ export const auth = betterAuth({
 
 	emailAndPassword: { enabled: false },
 
+	emailVerification: {
+		expiresIn: EMAIL_CHANGE_TOKEN_EXPIRATION_SECONDS,
+		sendVerificationEmail: async ({ user, token }) => {
+			await sendEmail(
+				buildEmailVerificationEmail({
+					to: user.email,
+					verifyUrl: emailChangeUrl(token),
+					expiresInMinutes: EMAIL_CHANGE_TOKEN_EXPIRY_MINUTES,
+				}),
+			);
+		},
+	},
+
 	user: {
 		modelName: "user",
 		fields: {
@@ -50,6 +79,31 @@ export const auth = betterAuth({
 				input: false,
 				type: Object.values(USER_ROLE),
 				defaultValue: USER_ROLE.CUSTOMER,
+			},
+		},
+		changeEmail: {
+			enabled: true,
+			sendChangeEmailConfirmation: async ({ user, newEmail, token }) => {
+				await sendEmail(
+					buildEmailChangeApprovalEmail({
+						to: user.email,
+						newEmail,
+						approveUrl: emailChangeUrl(token),
+						expiresInMinutes: EMAIL_CHANGE_TOKEN_EXPIRY_MINUTES,
+					}),
+				);
+			},
+		},
+	},
+
+	databaseHooks: {
+		session: {
+			create: {
+				after: async (session) => {
+					void alertOnNewDeviceLogin(session).catch((error) => {
+						console.error("Failed to run new-device login alert:", error);
+					});
+				},
 			},
 		},
 	},

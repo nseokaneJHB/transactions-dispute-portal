@@ -21,6 +21,6 @@ Auth is Better Auth email-OTP (`docs/decisions.md` #21 — see `docs/auth.md`) �
 
 ## Explicitly out of scope
 
-- Real delivery of _dispute-status_ notifications specifically — that stays simulated via ntfy, not real push/SMS. (OTP codes and account-recovery email are real, via SMTP — see `docs/auth.md` — that's a different category, not an exception to this one.)
+- Real delivery of _dispute-status_ notifications specifically — that stays simulated via ntfy, not real push/SMS. (the OTP sign-in email, the new-device login alert and the email-change approval are all real, via SMTP — see `docs/auth.md` §3 — a different category, not an exception to this one.)
 - Any auth-credential delivery over ntfy (OTP codes included) — see Scope boundary above.
 - A public ntfy.sh topic — self-hosted only, so the submission doesn't depend on a third party being up during review.

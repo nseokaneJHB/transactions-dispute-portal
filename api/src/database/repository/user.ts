@@ -27,6 +27,20 @@ export const findUserByEmail = async (
 	return row;
 };
 
+/** A single user by id, or `undefined`. */
+export const findUserById = async (
+	executor: Executor,
+	id: string,
+): Promise<UserModelSelect | undefined> => {
+	const [row] = await executor
+		.select()
+		.from(UserModel)
+		.where(eq(UserModel.id, id))
+		.limit(1);
+
+	return row;
+};
+
 /**
  * Insert a user. `email_verified` is `true` — the only caller is invite
  * acceptance, where clicking the emailed link already proves the address.
