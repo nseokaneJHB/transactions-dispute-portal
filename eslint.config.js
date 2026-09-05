@@ -28,12 +28,17 @@ export default ts.config(
 		languageOptions: {
 			parserOptions: {
 				projectService: {
-					// drizzle-kit config: outside api/tsconfig.json's `src/**/*`
-					// include (which sets `rootDir: "src"` for `tsc`'s build
-					// output — widening it there would break `outDir`), but
-					// still real TS worth type-aware linting via the default
-					// in-memory project.
-					allowDefaultProject: ["api/drizzle.config.ts"],
+					// drizzle-kit config and the Vitest config: outside
+					// api/tsconfig.json's `src/**/*` include (which sets
+					// `rootDir: "src"` for `tsc`'s build output — widening it
+					// there would break `outDir`), but still real TS worth
+					// linting via the default in-memory project. The api test
+					// suite has its own api/test/tsconfig.json, picked up
+					// automatically.
+					allowDefaultProject: [
+						"api/drizzle.config.ts",
+						"api/vitest.config.ts",
+					],
 				},
 			},
 		},

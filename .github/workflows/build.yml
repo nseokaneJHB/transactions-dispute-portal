@@ -10,6 +10,31 @@ jobs:
   check:
     name: Lint, typecheck, build, test
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: transaction-dispute
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d transaction-dispute"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mailpit:
+        image: axllent/mailpit:latest
+        ports:
+          - 1025:1025
+          - 8025:8025
+
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/transaction-dispute
+      SMTP_HOST: localhost
+      SMTP_PORT: "1025"
+      MAILPIT_URL: http://localhost:8025
+
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +57,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Apply migrations
+        run: pnpm --filter @transaction-dispute-portal/api migrate
 
       - name: Test
         run: pnpm test
