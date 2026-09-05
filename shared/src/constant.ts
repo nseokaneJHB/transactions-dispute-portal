@@ -24,6 +24,7 @@ export const DISPUTE_STATUS = {
 	UNDER_REVIEW: "UNDER_REVIEW",
 	RESOLVED: "RESOLVED",
 	REJECTED: "REJECTED",
+	WITHDRAWN: "WITHDRAWN",
 } as const;
 
 export const DISPUTE_REASON = {
@@ -41,6 +42,12 @@ export const OPEN_DISPUTE_STATUS = [
 ] as const;
 
 export const TERMINAL_DISPUTE_STATUS = [
+	DISPUTE_STATUS.RESOLVED,
+	DISPUTE_STATUS.REJECTED,
+	DISPUTE_STATUS.WITHDRAWN,
+] as const;
+
+export const ADMIN_RESOLUTION_STATUS = [
 	DISPUTE_STATUS.RESOLVED,
 	DISPUTE_STATUS.REJECTED,
 ] as const;
@@ -175,6 +182,7 @@ export const API_PATHS = {
 
 	DISPUTES: "/disputes",
 	DISPUTE_DETAIL: "/disputes/:disputeId",
+	DISPUTE_WITHDRAW: "/disputes/:disputeId/withdraw",
 
 	ADMIN_DISPUTES: "/disputes",
 	ADMIN_DISPUTE_REVIEW: "/disputes/:disputeId/review",

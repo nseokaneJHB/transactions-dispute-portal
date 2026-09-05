@@ -1,5 +1,5 @@
 {
-  "id": "45c2f19c-0190-4311-9ead-1f8ee59e6fa2",
+  "id": "7f3f79c8-f0b8-41d1-8b88-ac3d40447c77",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1344,7 +1344,8 @@
         "SUBMITTED",
         "UNDER_REVIEW",
         "RESOLVED",
-        "REJECTED"
+        "REJECTED",
+        "WITHDRAWN"
       ]
     },
     "public.userRole": {

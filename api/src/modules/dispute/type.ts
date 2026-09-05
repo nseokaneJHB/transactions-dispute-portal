@@ -23,3 +23,8 @@ export interface GetDisputeRequest extends RouteGenericInterface {
 	Params: UuidParams<"disputeId">;
 	Reply: DisputeResponse | GlobalResponse;
 }
+
+export interface WithdrawDisputeRequest extends RouteGenericInterface {
+	Params: UuidParams<"disputeId">;
+	Reply: DisputeResponse | GlobalResponse;
+}

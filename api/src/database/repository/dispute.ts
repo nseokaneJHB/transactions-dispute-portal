@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, getTableColumns } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray } from "drizzle-orm";
 
 import {
 	DISPUTE_STATUS,
+	OPEN_DISPUTE_STATUS,
 	ORDER_DIRECTION,
 } from "@transaction-dispute-portal/shared";
 import type {
@@ -190,6 +191,31 @@ export const resolveDispute = async (
 			),
 		)
 		.returning();
+
+	return row;
+};
+
+/**
+ * Close one of a user's own open disputes as `WITHDRAWN`. Ownership and
+ * open-status are both in the `where` clause — another user's dispute, a
+ * missing one, or an already-closed one matches nothing and returns
+ * `undefined` (the caller's 404 / 409).
+ */
+export const withdrawDispute = async (
+	executor: Executor,
+	options: { id: string; userId: string },
+): Promise<DisputeRow | undefined> => {
+	const [row] = await executor
+		.update(DisputeModel)
+		.set({ status: DISPUTE_STATUS.WITHDRAWN, resolved_at: new Date() })
+		.where(
+			and(
+				eq(DisputeModel.id, options.id),
+				eq(DisputeModel.user_id, options.userId),
+				inArray(DisputeModel.status, OPEN_DISPUTE_STATUS),
+			),
+		)
+		.returning(CUSTOMER_COLUMNS);
 
 	return row;
 };

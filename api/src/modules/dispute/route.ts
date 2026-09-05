@@ -11,7 +11,12 @@ import {
 	disputeListResponseSchema,
 } from "@transaction-dispute-portal/shared";
 
-import { getDispute, listDisputes, submitDispute } from "./service.js";
+import {
+	getDispute,
+	listDisputes,
+	submitDispute,
+	withdrawDispute,
+} from "./service.js";
 
 export const route: FastifyPluginAsync = async (
 	app: FastifyInstance,
@@ -47,6 +52,26 @@ export const route: FastifyPluginAsync = async (
 				200: disputeListResponseSchema,
 				401: globalResponseSchema,
 				403: globalResponseSchema,
+				422: globalResponseSchema,
+				429: globalResponseSchema,
+				500: globalResponseSchema,
+			},
+		},
+	});
+
+	app.route({
+		method: "POST",
+		url: API_PATHS.DISPUTE_WITHDRAW,
+		handler: withdrawDispute,
+		preHandler: [app.authenticate, app.authorize(USER_ROLE.CUSTOMER)],
+		schema: {
+			params: uuidParamsSchema("disputeId"),
+			response: {
+				200: disputeResponseSchema,
+				401: globalResponseSchema,
+				403: globalResponseSchema,
+				404: globalResponseSchema,
+				409: globalResponseSchema,
 				422: globalResponseSchema,
 				429: globalResponseSchema,
 				500: globalResponseSchema,
