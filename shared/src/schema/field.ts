@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 import {
+	ADMIN_RESOLUTION_STATUS,
 	DISPUTE_REASON,
 	DISPUTE_STATUS,
 	HTTP_CODE,
 	ORDER_DIRECTION,
 	SERVER_STATUS,
-	TERMINAL_DISPUTE_STATUS,
 	USER_ROLE,
 } from "../constant.js";
 
@@ -71,7 +71,7 @@ export const disputeReasonSchema = z
 	.describe("Why the customer is disputing the charge");
 
 export const disputeResolutionSchema = z
-	.enum(TERMINAL_DISPUTE_STATUS)
+	.enum(ADMIN_RESOLUTION_STATUS)
 	.describe("The reviewer's decision — the terminal status to move the dispute to");
 
 /**

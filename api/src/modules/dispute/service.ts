@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import {
 	DISPUTE_STATUS,
+	TERMINAL_DISPUTE_STATUS,
 	HTTP_RESPONSE_CODE,
 } from "@transaction-dispute-portal/shared";
 import type { Dispute } from "@transaction-dispute-portal/shared";
@@ -12,6 +13,7 @@ import {
 	findUserDisputeById,
 	findUserTransactionById,
 	recordDisputeStatusChange,
+	withdrawDispute as withdrawUserDispute,
 } from "../../database/repository/index.js";
 import type { DisputeRow } from "../../database/repository/dispute.js";
 
@@ -19,7 +21,10 @@ import type {
 	GetDisputeRequest,
 	ListDisputesRequest,
 	SubmitDisputeRequest,
+	WithdrawDisputeRequest,
 } from "./type.js";
+
+const TERMINAL: readonly string[] = TERMINAL_DISPUTE_STATUS;
 
 const toWire = (row: DisputeRow): Dispute => ({
 	id: row.id,
@@ -103,6 +108,61 @@ export const listDisputes = async (
 		total: rows.length,
 		message: "Disputes retrieved.",
 		data: rows.map(toWire),
+	});
+};
+
+/** `POST /v1/disputes/:disputeId/withdraw` — the caller closes their own open dispute. */
+export const withdrawDispute = async (
+	request: FastifyRequest<WithdrawDisputeRequest>,
+	reply: FastifyReply<WithdrawDisputeRequest>,
+): Promise<void> => {
+	const { disputeId } = request.params;
+	const userId = request.user!.id;
+
+	const dispute = await findUserDisputeById(request.server.connection, {
+		id: disputeId,
+		userId,
+	});
+
+	if (!dispute) {
+		const { status, code } = HTTP_RESPONSE_CODE.NOT_FOUND;
+		return reply.status(status).send({ code, message: "Dispute not found." });
+	}
+
+	if (TERMINAL.includes(dispute.status)) {
+		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
+		return reply
+			.status(status)
+			.send({ code, message: "This dispute is already closed." });
+	}
+
+	const withdrawn = await request.server.connection.transaction(async (tx) => {
+		const row = await withdrawUserDispute(tx, { id: disputeId, userId });
+		if (!row) return undefined;
+
+		await recordDisputeStatusChange(tx, {
+			disputeId,
+			actorId: userId,
+			fromStatus: dispute.status,
+			toStatus: DISPUTE_STATUS.WITHDRAWN,
+			note: "Withdrawn by the customer.",
+		});
+
+		return row;
+	});
+
+	if (!withdrawn) {
+		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
+		return reply
+			.status(status)
+			.send({ code, message: "This dispute is already closed." });
+	}
+
+	const { status, code } = HTTP_RESPONSE_CODE.OK;
+	return reply.status(status).send({
+		code,
+		message: "Dispute withdrawn.",
+		data: toWire(withdrawn),
 	});
 };
 

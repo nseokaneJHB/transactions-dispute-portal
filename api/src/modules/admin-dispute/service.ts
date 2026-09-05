@@ -90,7 +90,7 @@ export const startDisputeReview = async (
 		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
 		return reply
 			.status(status)
-			.send({ code, message: "This dispute has already been resolved." });
+			.send({ code, message: "This dispute is already closed." });
 	}
 
 	const reviewed = await request.server.connection.transaction(async (tx) => {
@@ -155,7 +155,7 @@ export const resolveDisputeForReview = async (
 		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
 		return reply
 			.status(status)
-			.send({ code, message: "This dispute has already been resolved." });
+			.send({ code, message: "This dispute is already closed." });
 	}
 
 	const resolved = await request.server.connection.transaction(async (tx) => {
@@ -182,7 +182,7 @@ export const resolveDisputeForReview = async (
 		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
 		return reply
 			.status(status)
-			.send({ code, message: "This dispute has already been resolved." });
+			.send({ code, message: "This dispute is already closed." });
 	}
 
 	await publishDisputeUpdate(resolved.user_id, resolved.status);

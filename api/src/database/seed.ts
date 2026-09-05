@@ -106,6 +106,7 @@ const RESOLUTION_NOTES: Record<DisputeStatus, string[]> = {
 		"Customer confirmed the charge was legitimate on follow-up.",
 		"Dispute fell outside the 90-day window allowed by the scheme.",
 	],
+	[DISPUTE_STATUS.WITHDRAWN]: [],
 };
 
 const pick = <T>(values: readonly T[]): T => faker.helpers.arrayElement(values);
@@ -118,10 +119,11 @@ const randomAmountCents = (): number =>
 
 const randomDisputeStatus = (): DisputeStatus =>
 	faker.helpers.weightedArrayElement([
-		{ weight: 25, value: DISPUTE_STATUS.SUBMITTED },
-		{ weight: 20, value: DISPUTE_STATUS.UNDER_REVIEW },
-		{ weight: 35, value: DISPUTE_STATUS.RESOLVED },
-		{ weight: 20, value: DISPUTE_STATUS.REJECTED },
+		{ weight: 24, value: DISPUTE_STATUS.SUBMITTED },
+		{ weight: 18, value: DISPUTE_STATUS.UNDER_REVIEW },
+		{ weight: 33, value: DISPUTE_STATUS.RESOLVED },
+		{ weight: 18, value: DISPUTE_STATUS.REJECTED },
+		{ weight: 7, value: DISPUTE_STATUS.WITHDRAWN },
 	]);
 
 /** A first-person dispute description for the given reason. */
@@ -260,9 +262,11 @@ const seed = async (): Promise<void> => {
 				from: transaction.transacted_at,
 				to: now,
 			});
-			const isClosed =
+			const isAdminClosed =
 				status === DISPUTE_STATUS.RESOLVED ||
 				status === DISPUTE_STATUS.REJECTED;
+			const isClosed =
+				isAdminClosed || status === DISPUTE_STATUS.WITHDRAWN;
 			const resolvedAt = isClosed
 				? faker.date.between({ from: createdAt, to: now })
 				: null;
@@ -278,11 +282,11 @@ const seed = async (): Promise<void> => {
 				user_id: transaction.user_id,
 				transaction_id: transaction.id,
 				description: describeDispute(reason, transaction.merchant_name),
-				resolution_note: isClosed
+				resolution_note: isAdminClosed
 					? pick(RESOLUTION_NOTES[status])
 					: null,
 				resolved_at: resolvedAt,
-				resolved_by: isClosed ? admin.id : null,
+				resolved_by: isAdminClosed ? admin.id : null,
 				created_at: createdAt,
 				updated_at: updatedAt,
 			});
@@ -334,6 +338,18 @@ const seed = async (): Promise<void> => {
 			});
 
 			if (dispute.status === DISPUTE_STATUS.SUBMITTED) continue;
+
+			if (dispute.status === DISPUTE_STATUS.WITHDRAWN) {
+				auditRows.push({
+					dispute_id: dispute.id,
+					actor_id: dispute.user_id,
+					from_status: DISPUTE_STATUS.SUBMITTED,
+					to_status: DISPUTE_STATUS.WITHDRAWN,
+					note: "Withdrawn by the customer.",
+					created_at: dispute.resolved_at ?? now,
+				});
+				continue;
+			}
 
 			auditRows.push({
 				dispute_id: dispute.id,
