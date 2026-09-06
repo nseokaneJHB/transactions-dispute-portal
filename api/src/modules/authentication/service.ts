@@ -124,6 +124,14 @@ export const changeEmail = async (
 
 	await requestEmailChangeApi(request.headers, { newEmail });
 
+	await recordAuthEvent(request.server.connection, {
+		email: request.user!.email,
+		event: AUTH_EVENT.EMAIL_CHANGE_REQUESTED,
+		userId: request.user!.id,
+		ipAddress: request.ip,
+		userAgent: request.headers["user-agent"],
+	});
+
 	const { status, code } = HTTP_RESPONSE_CODE.OK;
 	return reply.status(status).send({
 		code,

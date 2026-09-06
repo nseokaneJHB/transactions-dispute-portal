@@ -1,5 +1,5 @@
 {
-  "id": "7f3f79c8-f0b8-41d1-8b88-ac3d40447c77",
+  "id": "e75f5448-be51-453e-8b4d-3fd193009368",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1322,7 +1322,8 @@
         "OTP_REQUESTED",
         "LOGIN_SUCCESS",
         "LOGIN_FAILURE",
-        "OTP_LOCKED"
+        "OTP_LOCKED",
+        "EMAIL_CHANGE_REQUESTED"
       ]
     },
     "public.disputeReason": {

@@ -1,4 +1,4 @@
-import { APP_NAME, FRONTEND_URLS } from "@transaction-dispute-portal/shared";
+import { APP_NAME } from "@transaction-dispute-portal/shared";
 
 import type { EmailContent } from "../lib/mailer.js";
 
@@ -8,6 +8,7 @@ interface NewDeviceLoginPayload {
 	at: Date;
 	ipAddress: string | null;
 	userAgent: string | null;
+	signInUrl: string;
 }
 
 /** Build the alert sent when an account signs in from a device it hasn't been seen on. */
@@ -27,7 +28,7 @@ export const buildNewDeviceLoginEmail = (
 				</ul>
 				<p>If this was you, nothing more to do. If it wasn't, sign in and end other
 					sessions right away — your email is the only key to this account.</p>
-				<p style="color: #909090; font-size: 14px;">Sign in at ${FRONTEND_URLS.SIGN_IN}</p>
+				<p style="color: #909090; font-size: 14px;">Sign in at <a href="${payload.signInUrl}">${payload.signInUrl}</a></p>
 			</div>
 		</div>
 	`,

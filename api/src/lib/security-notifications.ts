@@ -1,9 +1,12 @@
+import { FRONTEND_URLS } from "@transaction-dispute-portal/shared";
+
 import { connection } from "../database/config.js";
 import { findUserById } from "../database/repository/user.js";
 import { hasKnownDeviceSession } from "../database/repository/session.js";
 
 import { buildNewDeviceLoginEmail } from "../email/new-device-login.js";
 
+import { env } from "./env.js";
 import { sendEmail } from "./mailer.js";
 
 interface CreatedSession {
@@ -42,6 +45,7 @@ export const alertOnNewDeviceLogin = async (
 			at: new Date(),
 			ipAddress: session.ipAddress ?? null,
 			userAgent: session.userAgent,
+			signInUrl: `${env.FRONTEND_URL}${FRONTEND_URLS.SIGN_IN}`,
 		}),
 	);
 };

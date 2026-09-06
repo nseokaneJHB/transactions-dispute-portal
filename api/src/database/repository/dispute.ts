@@ -86,12 +86,18 @@ export const findDisputesByUser = async (
 	return { rows, total };
 };
 
-/** A single dispute, but only if it belongs to `userId` — otherwise `undefined`. */
+/**
+ * A single dispute, but only if it belongs to `userId` — otherwise `undefined`.
+ * Pass `lockForUpdate` inside a transaction to take a row lock, so a concurrent
+ * admin transition can't change the status between this read and a follow-up
+ * write (used by the withdraw path to record an accurate `from_status`).
+ */
 export const findUserDisputeById = async (
 	executor: Executor,
 	options: { id: string; userId: string },
+	queryOptions: { lockForUpdate?: boolean } = {},
 ): Promise<DisputeRow | undefined> => {
-	const [row] = await executor
+	const query = executor
 		.select(CUSTOMER_COLUMNS)
 		.from(DisputeModel)
 		.where(
@@ -101,6 +107,8 @@ export const findUserDisputeById = async (
 			),
 		)
 		.limit(1);
+
+	const [row] = await (queryOptions.lockForUpdate ? query.for("update") : query);
 
 	return row;
 };

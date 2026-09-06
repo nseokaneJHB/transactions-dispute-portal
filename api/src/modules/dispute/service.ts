@@ -2,8 +2,8 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import {
 	DISPUTE_STATUS,
-	TERMINAL_DISPUTE_STATUS,
 	HTTP_RESPONSE_CODE,
+	isOpenDisputeStatus,
 } from "@transaction-dispute-portal/shared";
 import type { Dispute } from "@transaction-dispute-portal/shared";
 
@@ -23,8 +23,6 @@ import type {
 	SubmitDisputeRequest,
 	WithdrawDisputeRequest,
 } from "./type.js";
-
-const TERMINAL: readonly string[] = TERMINAL_DISPUTE_STATUS;
 
 const toWire = (row: DisputeRow): Dispute => ({
 	id: row.id,
@@ -119,26 +117,20 @@ export const withdrawDispute = async (
 	const { disputeId } = request.params;
 	const userId = request.user!.id;
 
-	const dispute = await findUserDisputeById(request.server.connection, {
-		id: disputeId,
-		userId,
-	});
+	const outcome = await request.server.connection.transaction(async (tx) => {
+		const dispute = await findUserDisputeById(
+			tx,
+			{ id: disputeId, userId },
+			{ lockForUpdate: true },
+		);
 
-	if (!dispute) {
-		const { status, code } = HTTP_RESPONSE_CODE.NOT_FOUND;
-		return reply.status(status).send({ code, message: "Dispute not found." });
-	}
+		if (!dispute) return { kind: "not_found" as const };
+		if (!isOpenDisputeStatus(dispute.status)) {
+			return { kind: "closed" as const };
+		}
 
-	if (TERMINAL.includes(dispute.status)) {
-		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
-		return reply
-			.status(status)
-			.send({ code, message: "This dispute is already closed." });
-	}
-
-	const withdrawn = await request.server.connection.transaction(async (tx) => {
 		const row = await withdrawUserDispute(tx, { id: disputeId, userId });
-		if (!row) return undefined;
+		if (!row) return { kind: "closed" as const };
 
 		await recordDisputeStatusChange(tx, {
 			disputeId,
@@ -148,10 +140,15 @@ export const withdrawDispute = async (
 			note: "Withdrawn by the customer.",
 		});
 
-		return row;
+		return { kind: "ok" as const, row };
 	});
 
-	if (!withdrawn) {
+	if (outcome.kind === "not_found") {
+		const { status, code } = HTTP_RESPONSE_CODE.NOT_FOUND;
+		return reply.status(status).send({ code, message: "Dispute not found." });
+	}
+
+	if (outcome.kind === "closed") {
 		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
 		return reply
 			.status(status)
@@ -162,7 +159,7 @@ export const withdrawDispute = async (
 	return reply.status(status).send({
 		code,
 		message: "Dispute withdrawn.",
-		data: toWire(withdrawn),
+		data: toWire(outcome.row),
 	});
 };
 
