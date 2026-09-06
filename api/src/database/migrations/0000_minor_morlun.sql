@@ -1,4 +1,4 @@
-CREATE TYPE "public"."authEvent" AS ENUM('OTP_REQUESTED', 'LOGIN_SUCCESS', 'LOGIN_FAILURE', 'OTP_LOCKED');--> statement-breakpoint
+CREATE TYPE "public"."authEvent" AS ENUM('OTP_REQUESTED', 'LOGIN_SUCCESS', 'LOGIN_FAILURE', 'OTP_LOCKED', 'EMAIL_CHANGE_REQUESTED');--> statement-breakpoint
 CREATE TYPE "public"."disputeReason" AS ENUM('FRAUDULENT_CHARGE', 'DUPLICATE_CHARGE', 'INCORRECT_AMOUNT', 'GOODS_NOT_RECEIVED', 'SUBSCRIPTION_NOT_CANCELLED', 'OTHER');--> statement-breakpoint
 CREATE TYPE "public"."disputeStatus" AS ENUM('SUBMITTED', 'UNDER_REVIEW', 'RESOLVED', 'REJECTED', 'WITHDRAWN');--> statement-breakpoint
 CREATE TYPE "public"."userRole" AS ENUM('ADMIN', 'CUSTOMER');--> statement-breakpoint

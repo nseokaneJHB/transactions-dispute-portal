@@ -1,5 +1,9 @@
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { connection } from "../src/database/config.js";
+import { DisputeAuditLogModel } from "../src/database/schema/index.js";
 
 import { createTestApp } from "./helpers/app.js";
 import { signIn, type Session } from "./helpers/auth.js";
@@ -117,6 +121,38 @@ describe("dispute lifecycle transitions", () => {
 			headers: { cookie: alice.cookie },
 		});
 		expect(withdrawB.statusCode).toBe(200);
+	});
+
+	it("records the true from-status when a dispute is withdrawn out of review", async () => {
+		const id = await submit(app, alice.cookie, data.aliceTransactionIds[3]);
+
+		await app.inject({
+			method: "POST",
+			url: `/v1/admin/disputes/${id}/review`,
+			headers: { cookie: admin.cookie },
+		});
+
+		const withdraw = await app.inject({
+			method: "POST",
+			url: `/v1/disputes/${id}/withdraw`,
+			headers: { cookie: alice.cookie },
+		});
+		expect(withdraw.statusCode).toBe(200);
+
+		const [row] = await connection
+			.select({
+				from_status: DisputeAuditLogModel.from_status,
+				to_status: DisputeAuditLogModel.to_status,
+			})
+			.from(DisputeAuditLogModel)
+			.where(
+				and(
+					eq(DisputeAuditLogModel.dispute_id, id),
+					eq(DisputeAuditLogModel.to_status, "WITHDRAWN"),
+				),
+			);
+
+		expect(row?.from_status).toBe("UNDER_REVIEW");
 	});
 
 	it("409s a second withdraw and blocks admin review of a withdrawn dispute", async () => {
