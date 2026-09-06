@@ -9,7 +9,7 @@ These exist so questions on scaling/failover/traffic/resilience have a real answ
 - **Idempotency / one-open-dispute-per-transaction** — see `docs/api.md` (`POST /api/disputes`).
 - **Health endpoints** — `/healthz`, `/readyz` (see `docs/api.md`). Needed for k8s liveness/readiness probes anyway, and it's the hook for the failover conversation (pod dies → readiness probe fails → traffic drained → rolling replacement).
 - **`k8s/` manifests with substance** — `replicas: 3`, resource requests/limits, an HPA keyed on CPU, and a PodDisruptionBudget. None of this needs to run, but a manifest with an HPA + PDB is something to point to on screen, not hand-waved.
-- **One real load-test number** — run `autocannon` or `k6` once against the paginated disputes endpoint, put the measured p95 latency/RPS in the README. Highest-leverage item here: a number beats a claim, for near-zero effort.
+- **One real load-test number** — run `autocannon` or `k6` once against the paginated disputes endpoint, put the measured p95 latency/RPS in the README. Highest-leverage item here: a number beats a claim, for near-zero effort. _Done — see the README "Performance" section._
 
 ## Document only — state the target architecture and why, don't build it
 
@@ -17,6 +17,7 @@ These exist so questions on scaling/failover/traffic/resilience have a real answ
 - Read replica for the historic-disputes read path once write/read ratio justifies it — ties to the indexing story above.
 - ALB/API Gateway → ECS/Fargate or k8s Ingress in front of the stateless API — call out explicitly that the LB is only meaningful _because_ the API is stateless, don't list it as a bullet on its own.
 - Event durability caveat: today the status-change event is in-process/simulated; production would move it to SQS/EventBridge so a notification-consumer failure can't affect the API request path.
+- Session-lookup cost: the load test (README "Performance") shows the DB-backed session check, not Postgres or Fastify, is the authenticated-route ceiling (~250 req/s vs ~3,700 for an unauthenticated DB round-trip on the same stack). The stateless-API tradeoff above is still the right call for horizontal scaling; the mitigation is a short-TTL cache on the session read (or Better Auth's cookie-cache / JWT session mode), not moving state back into the process.
 
 ## Cloud/K8s in the README
 

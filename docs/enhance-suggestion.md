@@ -17,6 +17,10 @@ written.
 > global 409 handler — **not** the `Idempotency-Key` column this doc proposed
 > (`docs/decisions.md` #40 rejected that as machinery the DB constraint already
 > covers). #1, #2, #9, #10 remain Week-3 work.
+>
+> **Update (2026-09-06):** #2 is done — the Vitest integration suite exists
+> (`docs/decisions.md` #47). A second batch of findings, from a backend audit, is
+> in the **Backend audit — 2026-09-06** section at the end of this file.
 
 ---
 
@@ -506,3 +510,159 @@ form validation so the client and server validate identically.
 and the shared schemas all start earning their keep, and the submission
 demonstrates the full stack rather than a backend with a proof-of-concept
 frontend.
+
+---
+
+# Backend audit — 2026-09-06
+
+A read-through of everything on `pass-2-trims-and-modules` (the four backend
+modules: admin-invite, dispute withdraw, account-security emails, the Vitest
+suite). Two bugs and two cross-module inconsistencies were **fixed in place** —
+`docs/decisions.md` #49 records the split, #45 / #46 carry the detail. The items
+below were **deferred**: each is real, none blocks the submission, and several
+need a design decision rather than an edit. Ordered by value.
+
+## A1 — new-device alert email had a broken sign-in link · FIXED
+
+`api/src/email/new-device-login.ts` rendered `FRONTEND_URLS.SIGN_IN` (`/sign-in`)
+literally into the email body. Now takes an absolute `signInUrl`
+(`${env.FRONTEND_URL}${…}`), matching the invite / verification emails.
+
+## A2 — withdraw audit row could record a stale `from_status` · FIXED
+
+The pre-read was outside the transaction and unlocked; an admin `review` landing
+between the read and the guarded `UPDATE` made the `dispute_audit_log` row say
+`SUBMITTED → WITHDRAWN` for what was really `UNDER_REVIEW → WITHDRAWN`. Fixed with
+`SELECT … FOR UPDATE` inside the transaction (`docs/decisions.md` #45); covered by
+a new case in `dispute-lifecycle.test.ts`.
+
+## Consistency fixes · FIXED
+
+- `isOpenDisputeStatus` / `isTerminalDisputeStatus` in `shared/util.ts` replace the
+  per-file `const TERMINAL: readonly string[] = TERMINAL_DISPUTE_STATUS` widening
+  alias in `modules/dispute/service.ts`.
+- `POST /v1/auth/change-email` writes an `EMAIL_CHANGE_REQUESTED` `auth_audit_log`
+  row, matching the OTP handlers (`docs/decisions.md` #46).
+- `web/.env`'s `VITE_APP_NAME` (a hand-copy of `shared`'s `APP_NAME`) deleted —
+  nothing consumed it.
+
+---
+
+## E1 — new-device detection is an exact `user_agent` string match
+
+**Problem.** `repository/session.ts` `hasKnownDeviceSession` compares `user_agent`
+verbatim, so every browser point-release counts as a new device and emails the
+user. The seeded known-device UA is a frozen Chrome-140 string — a reviewer on
+any other browser/version gets a new-device alert on their first login.
+
+**Suggested change.** Coarsen the fingerprint: match on a normalised
+browser-family + major-version (or browser-family + a rounded IP prefix). Keep the
+raw `user_agent` in the row for the email body. This needs a small parsing helper
+and a call on how coarse is right — worth a `decisions.md` line when done.
+
+**Benefit.** Alerts fire on genuine new devices, not on Chrome updating itself.
+
+## E2 — the first-ever login fires a "new device" alert
+
+**Problem.** A newly-invited admin who accepts the invite and signs in has no
+prior session, so `hasKnownDeviceSession` returns false and they get a "we noticed
+a new sign-in" email for the first login of an account they just created.
+
+**Suggested change.** In `alertOnNewDeviceLogin`, skip the alert when the user has
+**zero** prior sessions (distinct from "one or more, none matching"). One extra
+count, or fold it into the E1 helper.
+
+**Benefit.** The alert means "a device you didn't set up", not "you, just now".
+
+## E3 — best-effort sends fail silently with no signal · partly C
+
+**Problem.** `sendEmail`, `publishDisputeUpdate`, and `alertOnNewDeviceLogin` all
+swallow errors. A permanently misconfigured SMTP or ntfy is invisible except for
+console noise — no counter, no `/readyz` degradation.
+
+**Suggested change.** Two parts. (a) Route the three `console.error` calls in
+`lib/{auth,notifier,mailer}.ts` through the Pino `logger` singleton (they're the
+only runtime paths not using it — everything else does). (b) Optionally increment
+a module-level failure counter and expose it on a future `/metrics` endpoint
+(`docs/production-runbook.md` §8 already plans `prom-client`).
+
+**Benefit.** Structured, level-respecting logs in production; a hook for the
+"how would you know email delivery broke" question.
+
+## E5 — `confirmEmailChange` routes both token types through `verifyEmail`
+
+**Problem.** `lib/authentication.ts` sends step 1 (approval token, old address)
+and step 2 (verification token, new address) both to `auth.api.verifyEmail`. In
+Better Auth 1.7.2 that's correct — both are JWTs the `/verify-email` handler
+branches on by `requestType` — but it's an undocumented internal shape. A minor
+BA bump that splits the endpoints breaks step 1 as a generic 401 with no signal
+it's a wiring problem.
+
+**Suggested change.** Add an integration test that runs the full two-step change
+against the real BA instance (submit → follow approval token → follow verification
+token → assert `user.email` changed). The suite already has the Mailpit plumbing;
+`extractToken` is in `test/helpers/mailpit.ts`. Pin the behaviour so a BA upgrade
+that breaks it fails CI loudly.
+
+## E6 — `change-email/confirm` shares the request-side rate limit
+
+**Problem.** `EMAIL_CHANGE_RATE_LIMIT` (`max: OTP.MAX_ATTEMPTS`, i.e. 5 / window)
+gates both `POST /v1/auth/change-email` and `.../confirm`. The confirm step is a
+link click from an email; a double-click or a client retry burns the budget, and
+5 is tight for that.
+
+**Suggested change.** Split into `CHANGE_EMAIL_REQUEST_RATE_LIMIT` and a looser
+`CHANGE_EMAIL_CONFIRM_RATE_LIMIT`, and while there stop borrowing
+`OTP.MAX_ATTEMPTS` for non-OTP endpoints — a `RATE_LIMIT` constant group in
+`shared/constant.ts` (`AUTH_SENSITIVE`, `AUTH_VERIFY`, …) names the intent. Same
+applies to `admin-invite`'s `ACCEPT_RATE_LIMIT`.
+
+**Benefit.** The limit for each endpoint reflects that endpoint, and the constant
+it reads is named for what it's limiting.
+
+## E7 — `auth_audit_log` still has no `EMAIL_CHANGE_CONFIRMED`
+
+**Problem.** The request side is now audited (`EMAIL_CHANGE_REQUESTED`, #46); the
+confirm side isn't, because `.../confirm` has no user context — just a token from
+an email.
+
+**Suggested change.** When it's worth the coupling: decode the BA JWT in
+`confirmEmailChange` (`jose`, `BETTER_AUTH_SECRET` — we own the secret) to read
+`{ email, updateTo, requestType }`, and on a successful `change-email-verification`
+write `EMAIL_CHANGE_CONFIRMED` with the old email. Alternatively wait for a BA
+version that types `emailVerification.afterEmailVerification` and hook that.
+
+## E8 — env duplication: `API_URL` unset, `CORS_ORIGIN` ≡ `FRONTEND_URL`
+
+**Problem.** `api/.env` pins `FRONTEND_URL` but leaves `API_URL` to its default;
+`CORS_ORIGIN` and `FRONTEND_URL` are separate vars holding the same value, so
+setting one wrong silently diverges redirects from CORS.
+
+**Suggested change.** Set `API_URL` explicitly in `api/.env` for symmetry, and
+default `CORS_ORIGIN` from `FRONTEND_URL` in `lib/env.ts` (keep the override for
+the multi-origin case). One-line `env.ts` change.
+
+## E9 — two hardcoded `2000 ms` timeouts, and `VARCHAR_LIMIT = 255`
+
+**Problem.** `lib/notifier.ts` (`PUBLISH_TIMEOUT_MS`) and `modules/check/service.ts`
+(`DATABASE_PROBE_TIMEOUT_MS`) each declare their own `2000`. `repository/auth-audit-log.ts`
+hardcodes `255` to mirror the schema `varchar` width — a silent over-truncation
+risk if the column grows.
+
+**Suggested change.** A small `TIMEOUTS` group in `shared/constant.ts` (or
+`env`-driven if a reviewer would want to tune the probe timeout). Derive the
+clamp width from the column, or hoist the `255` to one named constant the schema
+and the repo both read.
+
+## E10 — `confirmEmailChange` drops the session cookie Better Auth issues
+
+**Problem.** On the `change-email-verification` step, BA creates a session and
+calls `setSessionCookie` if the request is unauthenticated. `confirmEmailChange`
+uses `asResponse: true` but the handler doesn't forward `Set-Cookie` (unlike
+`verifyOtp` / `endSession`), so BA's session is orphaned and the user isn't
+logged in after confirming from the link.
+
+**Suggested change.** Decide the intent first: *should* confirming an email change
+from a link log you in? If yes, forward the cookies like `verifyOtp` does. If no,
+that's fine — but then the orphaned session row is worth a note, or disable
+BA's auto-session-on-verify. Either way it's a product call, not just a fix.
