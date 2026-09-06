@@ -2,7 +2,7 @@
 
 Solo submission for an internal promotion evaluation. See `CLAUDE.md` and `docs/brief.md` for full context; `docs/decisions.md` for the "why" behind every non-trivial choice.
 
-**Status: full API surface wired** — the Drizzle schema, Better Auth (email-OTP), env validation, OTP email, the Fastify request stack (`docs/decisions.md` #35), the `check` / `authentication` / `transaction` / `dispute` / `admin-dispute` modules (customer submit/list/detail + the full admin `submit → review → resolve` lifecycle, `docs/decisions.md` #40/#41), status notifications over ntfy, and deterministic seed/purge scripts all exist and are verified. Still to come: admin invites, Vitest tests, the `web` UI, and a deliberate pass on the dispute-lifecycle edge cases (`docs/decisions.md` #41 open item). See `docs/codebase-index.md` for what actually exists on disk.
+**Status: backend feature-complete; the `web` UI is the remaining work.** The Drizzle schema, Better Auth (email-OTP), env validation, the Fastify request stack (`docs/decisions.md` #35), and every backend module are built and verified: `check`, `authentication` (OTP sign-in + a two-step email change, `docs/decisions.md` #46), `transaction`, `dispute` (submit / list / detail / withdraw, `#40`/`#45`), `admin-dispute` (`review → resolve` lifecycle, `#41`), `admin-invite` (invite-only admin signup, `#44`). Plus new-device login alerts, dispute-status notifications over ntfy, deterministic seed/purge, and a 33-test Vitest integration suite running in CI against real Postgres + Mailpit (`#47`). Deferred backend hardening is catalogued in `docs/enhance-suggestion.md`. Still to come: the `web` UI. See `docs/codebase-index.md` for a per-file map.
 
 ## Local setup
 
@@ -21,13 +21,24 @@ docker compose exec transaction-dispute-portal-api \
 
 **Logging in:** login is email-OTP (`docs/decisions.md` #21) — enter an account's email, then check `http://localhost:8025` for the one-time code. Nothing is really "sent" anywhere: SMTP points at the local Mailpit catcher. Seeded accounts: `thelowlydev@gmail.com` (admin), `customer@example.com` (long history), `newcomer@example.com` (no disputes). To use a real inbox instead, put a real Gmail App Password in `SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` in `api/.env` or an untracked `api/.env.local`.
 
+## Performance
+
+One number, measured on the dev stack (`docker compose up`, `tsx` watch, single machine), against the seeded dataset (~4.3k transactions):
+
+```
+autocannon -c 20 -d 20   GET /v1/transactions?limit=20   (authenticated, paginated, indexed)
+  → ~230 req/s   p50 79 ms   p97.5 171 ms   p99 223 ms
+```
+
+Throughput plateaus near **250 req/s** as concurrency rises (latency grows, RPS doesn't). For contrast, `GET /readyz` — a real DB round-trip with no session — sustains **~3,700 req/s at p99 15 ms** on the same stack. So Postgres and Fastify are not the ceiling: it's Better Auth's per-request session lookup on every authenticated route. The scaling lever (cache the session check, or move to stateless JWT sessions) is noted in `docs/scaling-and-resilience.md`; a production build (no watch/bind-mount, compiled output) would also lift the floor.
+
 ## Going to production
 
 This repo is development-only by design (`docs/decisions.md` #42) — one `compose.yml`, one dev `Dockerfile` per package, no live deployment. **`docs/production-runbook.md`** is the step-by-step for making it production-ready: multi-stage images, orchestrator-injected secrets, migrations as a gated pre-deploy step, a registry-push + gated-deploy pipeline, and k8s manifests with the probes wired to `/healthz` + `/readyz`.
 
 ## CI
 
-`.github/workflows/build.yml` runs on every push and PR: `lint` / `typecheck` / `build` / `test`, then a second job that does `docker compose up -d --build --wait`, hits `/healthz`, and runs `db:seed` — proving the clean-clone path.
+`.github/workflows/build.yml` runs on every push and PR. Job `check`: `lint` / `typecheck` / `build`, then `migrate` and `test` against `postgres:18` + `mailpit` service containers (the 33-test integration suite drives the real OTP flow, no forged sessions). Job `stack`: `docker compose up -d --build --wait`, hits `/healthz`, runs `db:seed` — proving the clean-clone path. No deploy pipeline (that's `docs/production-runbook.md`).
 
 ## Docs
 
