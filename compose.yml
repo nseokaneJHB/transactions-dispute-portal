@@ -34,6 +34,7 @@ services:
       - sh
       - -c
       - >
+        pnpm --filter @transaction-dispute-portal/shared build &&
         pnpm --filter @transaction-dispute-portal/api migrate &&
         pnpm --filter @transaction-dispute-portal/api dev --host 0.0.0.0
 
@@ -79,6 +80,13 @@ services:
 
     restart: unless-stopped
     working_dir: /workspace
+
+    command:
+      - sh
+      - -c
+      - >
+        pnpm --filter @transaction-dispute-portal/shared build &&
+        pnpm --filter @transaction-dispute-portal/web dev --host 0.0.0.0
 
     env_file:
       - ./web/.env
