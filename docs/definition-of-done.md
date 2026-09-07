@@ -2,7 +2,7 @@
 
 ## Definition of done
 
-- [ ] View / dispute / historic-view all work end-to-end (API + `web` UI both built; not yet manually verified end-to-end in a browser)
+- [x] View / dispute / historic-view all work end-to-end (verified live in a browser: sign in, view transactions, open/withdraw a dispute, sign in as admin, move to review, resolve — `docs/decisions.md` #52/#53/#54)
 - [x] Dispute lifecycle enforced server-side, not just in the UI (`docs/decisions.md` #41/#45 — `dispute-lifecycle.test.ts`)
 - [x] Auth scoping has a test proving you can't read another user's data (`transaction-scoping.test.ts` / `dispute-scoping.test.ts`, `docs/decisions.md` #47)
 - [x] `POST /v1/admin/disputes/:id/resolve` is unreachable via a customer session, and reachable only with the `admin` role (`admin-authz.test.ts`, `docs/decisions.md` #16/#47)
