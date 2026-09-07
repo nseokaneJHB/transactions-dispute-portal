@@ -2,7 +2,7 @@
 
 Solo submission for an internal promotion evaluation. See `CLAUDE.md` and `docs/brief.md` for full context; `docs/decisions.md` for the "why" behind every non-trivial choice.
 
-**Status: backend feature-complete; the `web` UI is the remaining work.** The Drizzle schema, Better Auth (email-OTP), env validation, the Fastify request stack (`docs/decisions.md` #35), and every backend module are built and verified: `check`, `authentication` (OTP sign-in + a two-step email change, `docs/decisions.md` #46), `transaction`, `dispute` (submit / list / detail / withdraw, `#40`/`#45`), `admin-dispute` (`review → resolve` lifecycle, `#41`), `admin-invite` (invite-only admin signup, `#44`). Plus new-device login alerts, dispute-status notifications over ntfy, deterministic seed/purge, and a 33-test Vitest integration suite running in CI against real Postgres + Mailpit (`#47`). Deferred backend hardening is catalogued in `docs/enhance-suggestion.md`. Still to come: the `web` UI. See `docs/codebase-index.md` for a per-file map.
+**Status: backend and web frontend both feature-complete.** The Drizzle schema, Better Auth (email-OTP), env validation, the Fastify request stack (`docs/decisions.md` #35), and every backend module are built and verified: `check`, `authentication` (OTP sign-in, a session endpoint for the client, a two-step email change, `docs/decisions.md` #46/#50), `transaction`, `dispute` (submit / list / detail / withdraw, `#40`/`#45`), `admin-dispute` (`review → resolve` lifecycle, `#41`), `admin-invite` (invite-only admin signup, `#44`). Plus new-device login alerts, dispute-status notifications over ntfy, deterministic seed/purge, and a 36-test Vitest integration suite running in CI against real Postgres + Mailpit (`#47`). `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy (`#51`) — customer transactions/disputes flow, admin review + invite flow, and account/email-change, all wired to the real API; it has 8 unit tests but no manual browser pass yet. Deferred backend hardening is catalogued in `docs/enhance-suggestion.md`. See `docs/codebase-index.md` for a per-file map.
 
 ## Local setup
 
@@ -38,7 +38,7 @@ This repo is development-only by design (`docs/decisions.md` #42) — one `compo
 
 ## CI
 
-`.github/workflows/build.yml` runs on every push and PR. Job `check`: `lint` / `typecheck` / `build`, then `migrate` and `test` against `postgres:18` + `mailpit` service containers (the 33-test integration suite drives the real OTP flow, no forged sessions). Job `stack`: `docker compose up -d --build --wait`, hits `/healthz`, runs `db:seed` — proving the clean-clone path. No deploy pipeline (that's `docs/production-runbook.md`).
+`.github/workflows/build.yml` runs on every push and PR. Job `check`: `lint` / `typecheck` / `build`, then `migrate` and `test` against `postgres:18` + `mailpit` service containers (the api's 36-test integration suite drives the real OTP flow, no forged sessions; the web package runs its own 8 unit tests in the same `test` step). Job `stack`: `docker compose up -d --build --wait`, hits `/healthz`, runs `db:seed` — proving the clean-clone path. No deploy pipeline (that's `docs/production-runbook.md`).
 
 ## Docs
 
