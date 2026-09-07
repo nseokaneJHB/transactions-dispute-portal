@@ -1,16 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-const Index = () => (
-	<main className="flex min-h-screen items-center justify-center p-8">
-		<div className="text-center">
-			<h1 className="text-2xl font-semibold">Transactions Dispute Portal</h1>
-			<p className="mt-2 text-gray-500">
-				Placeholder route — see docs/definition-of-done.md.
-			</p>
-		</div>
-	</main>
-);
+import { USER_ROLE, FRONTEND_URLS } from "@transaction-dispute-portal/shared";
 
 export const Route = createFileRoute("/")({
-	component: Index,
+	beforeLoad: ({ context }) => {
+		if (!context.user) {
+			throw redirect({ to: FRONTEND_URLS.SIGN_IN });
+		}
+
+		throw redirect({
+			to:
+				context.user.role === USER_ROLE.ADMIN
+					? FRONTEND_URLS.ADMIN
+					: FRONTEND_URLS.TRANSACTIONS,
+		});
+	},
 });

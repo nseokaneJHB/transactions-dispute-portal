@@ -4,6 +4,7 @@ import {
 	OTP,
 	API_PATHS,
 	globalResponseSchema,
+	authSessionResponseSchema,
 	authOtpRequestBodySchema,
 	authOtpVerifyBodySchema,
 	authChangeEmailBodySchema,
@@ -14,6 +15,7 @@ import {
 	requestOtp,
 	verifyOtp,
 	endSession,
+	getSession,
 	changeEmail,
 	confirmEmailChange,
 } from "./service.js";
@@ -25,6 +27,21 @@ const EMAIL_CHANGE_RATE_LIMIT = { max: OTP.MAX_ATTEMPTS };
 export const route: FastifyPluginAsync = async (
 	app: FastifyInstance,
 ): Promise<void> => {
+	app.route({
+		method: "GET",
+		url: API_PATHS.AUTH_SESSION,
+		handler: getSession,
+		preHandler: [app.authenticate],
+		schema: {
+			response: {
+				200: authSessionResponseSchema,
+				401: globalResponseSchema,
+				429: globalResponseSchema,
+				500: globalResponseSchema,
+			},
+		},
+	});
+
 	app.route({
 		method: "POST",
 		url: API_PATHS.AUTH_OTP_REQUEST,

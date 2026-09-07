@@ -9,17 +9,33 @@
 		"start": "node server.mjs",
 		"typecheck": "tsc --noEmit",
 		"lint": "eslint .",
+		"test": "vitest run",
 		"clean": "rm -rf node_modules dist .tanstack"
 	},
 	"dependencies": {
+		"@hookform/resolvers": "5.4.0",
+		"@t3-oss/env-core": "0.13.11",
 		"@tailwindcss/vite": "4.3.0",
+		"@tanstack/react-query": "5.100.14",
 		"@tanstack/react-router": "1.170.10",
+		"@tanstack/react-router-ssr-query": "1.167.1",
 		"@tanstack/react-start": "1.168.17",
 		"@transaction-dispute-portal/shared": "workspace:*",
+		"axios": "1.16.1",
+		"class-variance-authority": "0.7.1",
+		"clsx": "2.1.1",
+		"date-fns": "4.1.0",
+		"lucide-react": "1.17.0",
+		"radix-ui": "1.4.3",
 		"react": "19.2.6",
 		"react-dom": "19.2.6",
+		"react-hook-form": "7.77.0",
+		"sonner": "2.0.7",
 		"srvx": "0.11.22",
-		"tailwindcss": "4.3.0"
+		"tailwind-merge": "3.6.0",
+		"tailwindcss": "4.3.0",
+		"tw-animate-css": "1.4.0",
+		"zod": "4.4.3"
 	},
 	"devDependencies": {
 		"@types/node": "25.8.0",
@@ -27,6 +43,7 @@
 		"@types/react-dom": "19.2.3",
 		"@vitejs/plugin-react": "6.0.1",
 		"typescript": "6.0.3",
-		"vite": "8.0.13"
+		"vite": "8.0.13",
+		"vitest": "3.2.7"
 	}
 }
