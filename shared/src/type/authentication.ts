@@ -1,11 +1,17 @@
 import { z } from "zod";
 
 import {
+	authSessionSchema,
 	authOtpRequestBodySchema,
 	authOtpVerifyBodySchema,
+	authSessionResponseSchema,
 	authChangeEmailBodySchema,
 	authChangeEmailConfirmBodySchema,
 } from "../schema/authentication.js";
+
+export type AuthSession = z.infer<typeof authSessionSchema>;
+
+export type AuthSessionResponse = z.infer<typeof authSessionResponseSchema>;
 
 export type AuthOtpRequestBody = z.infer<typeof authOtpRequestBodySchema>;
 

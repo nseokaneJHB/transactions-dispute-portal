@@ -1,6 +1,6 @@
 {
 	"extends": "../tsconfig.base.json",
-	"include": ["vite.config.ts", "server.mjs", "src/**/*"],
+	"include": ["vite.config.ts", "vitest.config.ts", "server.mjs", "src/**/*"],
 	"compilerOptions": {
 		"jsx": "react-jsx",
 		"lib": ["ES2024", "DOM", "DOM.Iterable"],

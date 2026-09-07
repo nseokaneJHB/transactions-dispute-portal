@@ -9,38 +9,209 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UnauthenticatedRouteImport } from './routes/_unauthenticated'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminInviteRouteImport } from './routes/admin/invite'
+import { Route as AccountEmailChangeRouteImport } from './routes/account/email-change'
+import { Route as UnauthenticatedSignInRouteImport } from './routes/_unauthenticated/sign-in'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
+import { Route as AuthenticatedTransactionsIndexRouteImport } from './routes/_authenticated/transactions/index'
+import { Route as AuthenticatedDisputesIndexRouteImport } from './routes/_authenticated/disputes/index'
+import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
+import { Route as AuthenticatedTransactionsTransactionIdRouteImport } from './routes/_authenticated/transactions/$transactionId'
+import { Route as AuthenticatedDisputesDisputeIdRouteImport } from './routes/_authenticated/disputes/$disputeId'
+import { Route as AuthenticatedAdminInvitesRouteImport } from './routes/_authenticated/admin/invites'
 
+const UnauthenticatedRoute = UnauthenticatedRouteImport.update({
+  id: '/_unauthenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminInviteRoute = AdminInviteRouteImport.update({
+  id: '/admin/invite',
+  path: '/admin/invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountEmailChangeRoute = AccountEmailChangeRouteImport.update({
+  id: '/account/email-change',
+  path: '/account/email-change',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UnauthenticatedSignInRoute = UnauthenticatedSignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => UnauthenticatedRoute,
+} as any)
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedTransactionsIndexRoute =
+  AuthenticatedTransactionsIndexRouteImport.update({
+    id: '/transactions/',
+    path: '/transactions/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedDisputesIndexRoute =
+  AuthenticatedDisputesIndexRouteImport.update({
+    id: '/disputes/',
+    path: '/disputes/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
+const AuthenticatedTransactionsTransactionIdRoute =
+  AuthenticatedTransactionsTransactionIdRouteImport.update({
+    id: '/transactions/$transactionId',
+    path: '/transactions/$transactionId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedDisputesDisputeIdRoute =
+  AuthenticatedDisputesDisputeIdRouteImport.update({
+    id: '/disputes/$disputeId',
+    path: '/disputes/$disputeId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminInvitesRoute =
+  AuthenticatedAdminInvitesRouteImport.update({
+    id: '/invites',
+    path: '/invites',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AuthenticatedAccountRoute
+  '/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/sign-in': typeof UnauthenticatedSignInRoute
+  '/account/email-change': typeof AccountEmailChangeRoute
+  '/admin/invite': typeof AdminInviteRoute
+  '/admin/invites': typeof AuthenticatedAdminInvitesRoute
+  '/disputes/$disputeId': typeof AuthenticatedDisputesDisputeIdRoute
+  '/transactions/$transactionId': typeof AuthenticatedTransactionsTransactionIdRoute
+  '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/disputes/': typeof AuthenticatedDisputesIndexRoute
+  '/transactions/': typeof AuthenticatedTransactionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AuthenticatedAccountRoute
+  '/sign-in': typeof UnauthenticatedSignInRoute
+  '/account/email-change': typeof AccountEmailChangeRoute
+  '/admin/invite': typeof AdminInviteRoute
+  '/admin/invites': typeof AuthenticatedAdminInvitesRoute
+  '/disputes/$disputeId': typeof AuthenticatedDisputesDisputeIdRoute
+  '/transactions/$transactionId': typeof AuthenticatedTransactionsTransactionIdRoute
+  '/admin': typeof AuthenticatedAdminIndexRoute
+  '/disputes': typeof AuthenticatedDisputesIndexRoute
+  '/transactions': typeof AuthenticatedTransactionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/_unauthenticated': typeof UnauthenticatedRouteWithChildren
+  '/_authenticated/account': typeof AuthenticatedAccountRoute
+  '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/_unauthenticated/sign-in': typeof UnauthenticatedSignInRoute
+  '/account/email-change': typeof AccountEmailChangeRoute
+  '/admin/invite': typeof AdminInviteRoute
+  '/_authenticated/admin/invites': typeof AuthenticatedAdminInvitesRoute
+  '/_authenticated/disputes/$disputeId': typeof AuthenticatedDisputesDisputeIdRoute
+  '/_authenticated/transactions/$transactionId': typeof AuthenticatedTransactionsTransactionIdRoute
+  '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/_authenticated/disputes/': typeof AuthenticatedDisputesIndexRoute
+  '/_authenticated/transactions/': typeof AuthenticatedTransactionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/account'
+    | '/admin'
+    | '/sign-in'
+    | '/account/email-change'
+    | '/admin/invite'
+    | '/admin/invites'
+    | '/disputes/$disputeId'
+    | '/transactions/$transactionId'
+    | '/admin/'
+    | '/disputes/'
+    | '/transactions/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/account'
+    | '/sign-in'
+    | '/account/email-change'
+    | '/admin/invite'
+    | '/admin/invites'
+    | '/disputes/$disputeId'
+    | '/transactions/$transactionId'
+    | '/admin'
+    | '/disputes'
+    | '/transactions'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/_unauthenticated'
+    | '/_authenticated/account'
+    | '/_authenticated/admin'
+    | '/_unauthenticated/sign-in'
+    | '/account/email-change'
+    | '/admin/invite'
+    | '/_authenticated/admin/invites'
+    | '/_authenticated/disputes/$disputeId'
+    | '/_authenticated/transactions/$transactionId'
+    | '/_authenticated/admin/'
+    | '/_authenticated/disputes/'
+    | '/_authenticated/transactions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  UnauthenticatedRoute: typeof UnauthenticatedRouteWithChildren
+  AccountEmailChangeRoute: typeof AccountEmailChangeRoute
+  AdminInviteRoute: typeof AdminInviteRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/_unauthenticated': {
+      id: '/_unauthenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof UnauthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +219,140 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/invite': {
+      id: '/admin/invite'
+      path: '/admin/invite'
+      fullPath: '/admin/invite'
+      preLoaderRoute: typeof AdminInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account/email-change': {
+      id: '/account/email-change'
+      path: '/account/email-change'
+      fullPath: '/account/email-change'
+      preLoaderRoute: typeof AccountEmailChangeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_unauthenticated/sign-in': {
+      id: '/_unauthenticated/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof UnauthenticatedSignInRouteImport
+      parentRoute: typeof UnauthenticatedRoute
+    }
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/account': {
+      id: '/_authenticated/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AuthenticatedAccountRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/transactions/': {
+      id: '/_authenticated/transactions/'
+      path: '/transactions'
+      fullPath: '/transactions/'
+      preLoaderRoute: typeof AuthenticatedTransactionsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/disputes/': {
+      id: '/_authenticated/disputes/'
+      path: '/disputes'
+      fullPath: '/disputes/'
+      preLoaderRoute: typeof AuthenticatedDisputesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/': {
+      id: '/_authenticated/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/transactions/$transactionId': {
+      id: '/_authenticated/transactions/$transactionId'
+      path: '/transactions/$transactionId'
+      fullPath: '/transactions/$transactionId'
+      preLoaderRoute: typeof AuthenticatedTransactionsTransactionIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/disputes/$disputeId': {
+      id: '/_authenticated/disputes/$disputeId'
+      path: '/disputes/$disputeId'
+      fullPath: '/disputes/$disputeId'
+      preLoaderRoute: typeof AuthenticatedDisputesDisputeIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/invites': {
+      id: '/_authenticated/admin/invites'
+      path: '/invites'
+      fullPath: '/admin/invites'
+      preLoaderRoute: typeof AuthenticatedAdminInvitesRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
   }
 }
 
+interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminInvitesRoute: typeof AuthenticatedAdminInvitesRoute
+  AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+}
+
+const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminInvitesRoute: AuthenticatedAdminInvitesRoute,
+  AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+}
+
+const AuthenticatedAdminRouteWithChildren =
+  AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren)
+
+interface AuthenticatedRouteChildren {
+  AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
+  AuthenticatedDisputesDisputeIdRoute: typeof AuthenticatedDisputesDisputeIdRoute
+  AuthenticatedTransactionsTransactionIdRoute: typeof AuthenticatedTransactionsTransactionIdRoute
+  AuthenticatedDisputesIndexRoute: typeof AuthenticatedDisputesIndexRoute
+  AuthenticatedTransactionsIndexRoute: typeof AuthenticatedTransactionsIndexRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAccountRoute: AuthenticatedAccountRoute,
+  AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
+  AuthenticatedDisputesDisputeIdRoute: AuthenticatedDisputesDisputeIdRoute,
+  AuthenticatedTransactionsTransactionIdRoute:
+    AuthenticatedTransactionsTransactionIdRoute,
+  AuthenticatedDisputesIndexRoute: AuthenticatedDisputesIndexRoute,
+  AuthenticatedTransactionsIndexRoute: AuthenticatedTransactionsIndexRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
+interface UnauthenticatedRouteChildren {
+  UnauthenticatedSignInRoute: typeof UnauthenticatedSignInRoute
+}
+
+const UnauthenticatedRouteChildren: UnauthenticatedRouteChildren = {
+  UnauthenticatedSignInRoute: UnauthenticatedSignInRoute,
+}
+
+const UnauthenticatedRouteWithChildren = UnauthenticatedRoute._addFileChildren(
+  UnauthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  UnauthenticatedRoute: UnauthenticatedRouteWithChildren,
+  AccountEmailChangeRoute: AccountEmailChangeRoute,
+  AdminInviteRoute: AdminInviteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

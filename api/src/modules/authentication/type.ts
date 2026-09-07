@@ -2,11 +2,16 @@ import type { RouteGenericInterface } from "fastify";
 
 import type {
 	GlobalResponse,
+	AuthSessionResponse,
 	AuthOtpRequestBody,
 	AuthOtpVerifyBody,
 	AuthChangeEmailBody,
 	AuthChangeEmailConfirmBody,
 } from "@transaction-dispute-portal/shared";
+
+export interface GetSessionRequest extends RouteGenericInterface {
+	Reply: AuthSessionResponse | GlobalResponse;
+}
 
 export interface RequestOtpRequest extends RouteGenericInterface {
 	Body: AuthOtpRequestBody;

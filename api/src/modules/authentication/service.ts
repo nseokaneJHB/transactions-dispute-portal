@@ -19,6 +19,7 @@ import { recordAuthEvent } from "../../database/repository/index.js";
 
 import type {
 	SignOutRequest,
+	GetSessionRequest,
 	RequestOtpRequest,
 	VerifyOtpRequest,
 	ChangeEmailRequest,
@@ -38,6 +39,29 @@ const signInRedirect = (email: string): string =>
 const forwardSessionCookies = (reply: FastifyReply, source: Response): void => {
 	const cookies = source.headers.getSetCookie();
 	if (cookies.length > 0) reply.header("set-cookie", cookies);
+};
+
+/** `GET /v1/auth/session` — the signed-in user, for client route guards and the admin/customer UI split. */
+export const getSession = async (
+	request: FastifyRequest<GetSessionRequest>,
+	reply: FastifyReply<GetSessionRequest>,
+): Promise<void> => {
+	const user = request.user!;
+
+	const { status, code } = HTTP_RESPONSE_CODE.OK;
+	return reply.status(status).send({
+		code,
+		message: "Session retrieved.",
+		data: {
+			id: user.id,
+			name: user.name,
+			email: user.email,
+			role: user.role,
+			email_verified: user.email_verified,
+			created_at: new Date(user.created_at).toISOString(),
+			updated_at: new Date(user.updated_at).toISOString(),
+		},
+	});
 };
 
 /** `POST /v1/auth/otp` — send a one-time sign-in code by email. */
