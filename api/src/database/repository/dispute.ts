@@ -12,7 +12,7 @@ import type {
 	OrderDirection,
 } from "@transaction-dispute-portal/shared";
 
-import { DisputeModel } from "../schema/index.js";
+import { DisputeModel, TransactionModel } from "../schema/index.js";
 import type { DisputeModelSelect } from "../schema/index.js";
 
 import type { Executor } from "../executor.js";
@@ -24,7 +24,40 @@ import type { Executor } from "../executor.js";
  */
 const { user_id, resolved_by, ...CUSTOMER_COLUMNS } = getTableColumns(DisputeModel);
 
-export type DisputeRow = Omit<DisputeModelSelect, "user_id" | "resolved_by">;
+/**
+ * The disputed transaction's own columns, joined onto every dispute read so a
+ * customer or reviewer can see what's being disputed without a second lookup.
+ * `transaction_id` is `NOT NULL` (`database/schema/dispute.ts`), so an inner
+ * join never drops a dispute row.
+ */
+const TRANSACTION_SUMMARY_COLUMNS = {
+	merchant_name: TransactionModel.merchant_name,
+	amount_cents: TransactionModel.amount_cents,
+	transacted_at: TransactionModel.transacted_at,
+};
+
+type TransactionSummary = {
+	merchant_name: string;
+	amount_cents: number;
+	transacted_at: Date;
+};
+
+/**
+ * A dispute row as it comes back from an `UPDATE`/`INSERT ... RETURNING` —
+ * no joined transaction, since those statements can't join. The service layer
+ * already has the transaction in hand from a prior read in every such case,
+ * so it's merged in there instead of re-queried.
+ */
+export type DisputeMutationRow = Omit<
+	DisputeModelSelect,
+	"user_id" | "resolved_by"
+>;
+
+export type DisputeRow = DisputeMutationRow & { transaction: TransactionSummary };
+
+export type AdminDisputeRow = DisputeModelSelect & {
+	transaction: TransactionSummary;
+};
 
 interface FindManyOptions {
 	userId: string;
@@ -74,8 +107,12 @@ export const findDisputesByUser = async (
 
 	const [rows, total] = await Promise.all([
 		executor
-			.select(CUSTOMER_COLUMNS)
+			.select({ ...CUSTOMER_COLUMNS, transaction: TRANSACTION_SUMMARY_COLUMNS })
 			.from(DisputeModel)
+			.innerJoin(
+				TransactionModel,
+				eq(DisputeModel.transaction_id, TransactionModel.id),
+			)
 			.where(where)
 			.orderBy(direction(DisputeModel.created_at), desc(DisputeModel.id))
 			.limit(options.limit)
@@ -98,8 +135,12 @@ export const findUserDisputeById = async (
 	queryOptions: { lockForUpdate?: boolean } = {},
 ): Promise<DisputeRow | undefined> => {
 	const query = executor
-		.select(CUSTOMER_COLUMNS)
+		.select({ ...CUSTOMER_COLUMNS, transaction: TRANSACTION_SUMMARY_COLUMNS })
 		.from(DisputeModel)
+		.innerJoin(
+			TransactionModel,
+			eq(DisputeModel.transaction_id, TransactionModel.id),
+		)
 		.where(
 			and(
 				eq(DisputeModel.id, options.id),
@@ -117,7 +158,7 @@ export const findUserDisputeById = async (
 export const findDisputesForReview = async (
 	executor: Executor,
 	options: FindManyForReviewOptions,
-): Promise<Page<DisputeModelSelect>> => {
+): Promise<Page<AdminDisputeRow>> => {
 	const where = options.status
 		? eq(DisputeModel.status, options.status)
 		: undefined;
@@ -126,8 +167,15 @@ export const findDisputesForReview = async (
 
 	const [rows, total] = await Promise.all([
 		executor
-			.select()
+			.select({
+				...getTableColumns(DisputeModel),
+				transaction: TRANSACTION_SUMMARY_COLUMNS,
+			})
 			.from(DisputeModel)
+			.innerJoin(
+				TransactionModel,
+				eq(DisputeModel.transaction_id, TransactionModel.id),
+			)
 			.where(where)
 			.orderBy(direction(DisputeModel.created_at), desc(DisputeModel.id))
 			.limit(options.limit)
@@ -142,10 +190,17 @@ export const findDisputesForReview = async (
 export const findDisputeById = async (
 	executor: Executor,
 	options: { id: string },
-): Promise<DisputeModelSelect | undefined> => {
+): Promise<AdminDisputeRow | undefined> => {
 	const [row] = await executor
-		.select()
+		.select({
+			...getTableColumns(DisputeModel),
+			transaction: TRANSACTION_SUMMARY_COLUMNS,
+		})
 		.from(DisputeModel)
+		.innerJoin(
+			TransactionModel,
+			eq(DisputeModel.transaction_id, TransactionModel.id),
+		)
 		.where(eq(DisputeModel.id, options.id))
 		.limit(1);
 
@@ -212,7 +267,7 @@ export const resolveDispute = async (
 export const withdrawDispute = async (
 	executor: Executor,
 	options: { id: string; userId: string },
-): Promise<DisputeRow | undefined> => {
+): Promise<DisputeMutationRow | undefined> => {
 	const [row] = await executor
 		.update(DisputeModel)
 		.set({ status: DISPUTE_STATUS.WITHDRAWN, resolved_at: new Date() })
@@ -232,7 +287,7 @@ export const withdrawDispute = async (
 export const createDispute = async (
 	executor: Executor,
 	dispute: NewDispute,
-): Promise<DisputeRow> => {
+): Promise<DisputeMutationRow> => {
 	const [row] = await executor
 		.insert(DisputeModel)
 		.values({

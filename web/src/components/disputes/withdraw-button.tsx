@@ -9,6 +9,7 @@ import { QUERY_KEYS } from "@/api/constant";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useToastMutation } from "@/hooks/use-toast-mutation";
+import { refreshQuery } from "@/lib/query";
 
 export const WithdrawButton = ({ disputeId }: { disputeId: string }) => {
 	const router = useRouter();
@@ -25,8 +26,10 @@ export const WithdrawButton = ({ disputeId }: { disputeId: string }) => {
 			promise: mutateAsync(),
 			onSuccess: async () => {
 				setConfirming(false);
-				await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DISPUTES });
-				await router.invalidate();
+				await refreshQuery(queryClient, router, [
+					QUERY_KEYS.DISPUTES,
+					[...QUERY_KEYS.DISPUTE, disputeId],
+				]);
 			},
 		});
 

@@ -6,6 +6,7 @@ import {
 	disputeCreateBodySchema,
 	disputeResponseSchema,
 	disputeListResponseSchema,
+	disputeTransactionSchema,
 	adminDisputeSchema,
 	disputeResolveBodySchema,
 	adminDisputeResponseSchema,
@@ -17,6 +18,8 @@ export type DisputeCreateBody = z.infer<typeof disputeCreateBodySchema>;
 export type DisputesQuery = z.infer<typeof disputesQuerySchema>;
 
 export type Dispute = z.infer<typeof disputeSchema>;
+
+export type DisputeTransaction = z.infer<typeof disputeTransactionSchema>;
 
 export type DisputeResponse = z.infer<typeof disputeResponseSchema>;
 

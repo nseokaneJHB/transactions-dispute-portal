@@ -23,7 +23,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { formatDate, humanize } from "@/lib/format";
+import { formatDate, formatZar, humanize } from "@/lib/format";
 
 const searchSchema = z.object({
 	page: z.coerce.number().int().positive().optional(),
@@ -86,6 +86,7 @@ const DisputesPage = () => {
 					<TableHead>
 						<tr>
 							<TableHeaderCell>Opened</TableHeaderCell>
+							<TableHeaderCell>Transaction</TableHeaderCell>
 							<TableHeaderCell>Reason</TableHeaderCell>
 							<TableHeaderCell>Status</TableHeaderCell>
 							<TableHeaderCell />
@@ -96,6 +97,15 @@ const DisputesPage = () => {
 							<TableRow key={dispute.id}>
 								<TableCell className="text-muted-foreground whitespace-nowrap">
 									{formatDate(dispute.created_at)}
+								</TableCell>
+								<TableCell>
+									<span className="font-medium">
+										{dispute.transaction.merchant_name}
+									</span>
+									<span className="text-muted-foreground">
+										{" "}
+										{formatZar(dispute.transaction.amount_cents)}
+									</span>
 								</TableCell>
 								<TableCell className="font-medium">
 									{humanize(dispute.reason)}

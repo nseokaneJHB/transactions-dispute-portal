@@ -27,6 +27,11 @@ import type {
 const toWire = (row: DisputeRow): Dispute => ({
 	id: row.id,
 	transaction_id: row.transaction_id,
+	transaction: {
+		merchant_name: row.transaction.merchant_name,
+		amount_cents: row.transaction.amount_cents,
+		transacted_at: row.transaction.transacted_at.toISOString(),
+	},
 	status: row.status,
 	reason: row.reason,
 	description: row.description,
@@ -78,7 +83,7 @@ export const submitDispute = async (
 	return reply.status(status).send({
 		code,
 		message: "Dispute opened.",
-		data: toWire(created),
+		data: toWire({ ...created, transaction }),
 	});
 };
 
@@ -140,7 +145,7 @@ export const withdrawDispute = async (
 			note: "Withdrawn by the customer.",
 		});
 
-		return { kind: "ok" as const, row };
+		return { kind: "ok" as const, row: { ...row, transaction: dispute.transaction } };
 	});
 
 	if (outcome.kind === "not_found") {

@@ -13,9 +13,16 @@ import { Pagination } from "@/components/custom/pagination";
 import { EmptyState } from "@/components/custom/empty-state";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { DisputeActions } from "@/components/admin/dispute-actions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
-import { formatDate, humanize } from "@/lib/format";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeaderCell,
+	TableRow,
+} from "@/components/ui/table";
+import { formatDate, formatZar, humanize } from "@/lib/format";
 
 const searchSchema = z.object({
 	page: z.coerce.number().int().positive().optional(),
@@ -65,38 +72,44 @@ const ReviewQueuePage = () => {
 			{data.length === 0 ? (
 				<EmptyState title="Nothing in the queue" />
 			) : (
-				<div className="flex flex-col gap-3">
-					{data.map((dispute) => (
-						<Card key={dispute.id}>
-							<CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
-								<CardTitle className="flex items-center gap-2">
+				<Table>
+					<TableHead>
+						<tr>
+							<TableHeaderCell>Opened</TableHeaderCell>
+							<TableHeaderCell>Transaction</TableHeaderCell>
+							<TableHeaderCell>Reason</TableHeaderCell>
+							<TableHeaderCell>Status</TableHeaderCell>
+							<TableHeaderCell />
+						</tr>
+					</TableHead>
+					<TableBody>
+						{data.map((dispute) => (
+							<TableRow key={dispute.id}>
+								<TableCell className="text-muted-foreground whitespace-nowrap">
+									{formatDate(dispute.created_at)}
+								</TableCell>
+								<TableCell>
+									<span className="font-medium">
+										{dispute.transaction.merchant_name}
+									</span>
+									<span className="text-muted-foreground">
+										{" "}
+										{formatZar(dispute.transaction.amount_cents)}
+									</span>
+								</TableCell>
+								<TableCell className="font-medium">
 									{humanize(dispute.reason)}
+								</TableCell>
+								<TableCell>
 									<StatusBadge status={dispute.status} />
-								</CardTitle>
-								<span className="text-muted-foreground text-xs">
-									Opened {formatDate(dispute.created_at)}
-								</span>
-							</CardHeader>
-							<CardContent>
-								<p className="text-muted-foreground text-xs">
-									Customer {dispute.user_id}
-								</p>
-								<p className="text-sm whitespace-pre-wrap">
-									{dispute.description}
-								</p>
-								{dispute.resolution_note && (
-									<p className="bg-muted rounded-md p-3 text-sm">
-										<span className="font-medium">Decision note: </span>
-										{dispute.resolution_note}
-									</p>
-								)}
-								<div className="pt-1">
+								</TableCell>
+								<TableCell className="text-right">
 									<DisputeActions dispute={dispute} />
-								</div>
-							</CardContent>
-						</Card>
-					))}
-				</div>
+								</TableCell>
+							</TableRow>
+						))}
+					</TableBody>
+				</Table>
 			)}
 
 			<Pagination

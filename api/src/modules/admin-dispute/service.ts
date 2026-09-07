@@ -13,7 +13,7 @@ import {
 	recordDisputeStatusChange,
 	resolveDispute,
 } from "../../database/repository/index.js";
-import type { DisputeModelSelect } from "../../database/schema/index.js";
+import type { AdminDisputeRow } from "../../database/repository/dispute.js";
 
 import { publishDisputeUpdate } from "../../lib/notifier.js";
 
@@ -23,10 +23,15 @@ import type {
 	StartDisputeReviewRequest,
 } from "./type.js";
 
-const toWire = (row: DisputeModelSelect): AdminDispute => ({
+const toWire = (row: AdminDisputeRow): AdminDispute => ({
 	id: row.id,
 	user_id: row.user_id,
 	transaction_id: row.transaction_id,
+	transaction: {
+		merchant_name: row.transaction.merchant_name,
+		amount_cents: row.transaction.amount_cents,
+		transacted_at: row.transaction.transacted_at.toISOString(),
+	},
 	status: row.status,
 	reason: row.reason,
 	description: row.description,
@@ -105,7 +110,7 @@ export const startDisputeReview = async (
 			note: "Moved to review by the reviewer.",
 		});
 
-		return row;
+		return { ...row, transaction: dispute.transaction };
 	});
 
 	if (!reviewed) {
@@ -175,7 +180,7 @@ export const resolveDisputeForReview = async (
 			note,
 		});
 
-		return row;
+		return { ...row, transaction: dispute.transaction };
 	});
 
 	if (!resolved) {
