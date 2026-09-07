@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, ChevronRightIcon } from "lucide-react";
 
 import { isOpenDisputeStatus } from "@transaction-dispute-portal/shared";
 
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { WithdrawButton } from "@/components/disputes/withdraw-button";
-import { formatDateTime, humanize } from "@/lib/format";
+import { formatDate, formatDateTime, formatZar, humanize } from "@/lib/format";
 
 const DetailRow = ({ label, value }: { label: string; value: string }) => (
 	<div className="flex items-start justify-between gap-4 py-2 text-sm">
@@ -41,13 +41,38 @@ const DisputeDetailPage = () => {
 						label="Opened"
 						value={formatDateTime(dispute.created_at)}
 					/>
-					<DetailRow label="Transaction" value={dispute.transaction_id} />
 					{dispute.resolved_at && (
 						<DetailRow
 							label="Closed"
 							value={formatDateTime(dispute.resolved_at)}
 						/>
 					)}
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>Transaction disputed</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<Link
+						to="/transactions/$transactionId"
+						params={{ transactionId: dispute.transaction_id }}
+						className="hover:bg-muted -m-2 flex items-center justify-between gap-4 rounded-md p-2"
+					>
+						<div>
+							<p className="font-medium">{dispute.transaction.merchant_name}</p>
+							<p className="text-muted-foreground text-sm">
+								{formatDate(dispute.transaction.transacted_at)}
+							</p>
+						</div>
+						<div className="flex items-center gap-1">
+							<span className="font-medium">
+								{formatZar(dispute.transaction.amount_cents)}
+							</span>
+							<ChevronRightIcon className="text-muted-foreground size-4" />
+						</div>
+					</Link>
 				</CardContent>
 			</Card>
 

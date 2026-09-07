@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { humanize } from "@/lib/format";
 import { QUERY_KEYS } from "@/api/constant";
 import { env } from "@/lib/env";
+import { refreshQuery } from "@/lib/query";
 
 /**
  * Subscribe to the caller's per-user ntfy topic and surface a toast whenever a
@@ -37,8 +38,7 @@ export const useDisputeNotifications = (userId: string): void => {
 				description: `One of your disputes is now ${humanize(status)}.`,
 			});
 
-			void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DISPUTES });
-			void router.invalidate();
+			void refreshQuery(queryClient, router, [QUERY_KEYS.DISPUTES]);
 		});
 
 		source.onerror = () => source.close();

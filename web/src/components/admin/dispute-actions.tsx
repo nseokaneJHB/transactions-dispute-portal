@@ -1,8 +1,10 @@
+import { useState } from "react";
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { GavelIcon, SearchCheckIcon } from "lucide-react";
+import { EyeIcon, GavelIcon, SearchCheckIcon } from "lucide-react";
 
 import {
 	DISPUTE_STATUS,
@@ -17,12 +19,28 @@ import { reviewDispute, resolveDispute } from "@/api/admin";
 import { QUERY_KEYS } from "@/api/constant";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@/components/ui/dialog";
+import { StatusBadge } from "@/components/custom/status-badge";
 import { SelectField, TextAreaField } from "@/components/custom/text-field";
 import { useFormField } from "@/hooks/use-form-field";
 import { useToastMutation } from "@/hooks/use-toast-mutation";
-import { humanize } from "@/lib/format";
+import { formatDate, formatZar, humanize } from "@/lib/format";
+import { refreshQuery } from "@/lib/query";
 
-const ResolveForm = ({ disputeId }: { disputeId: string }) => {
+const ResolveForm = ({
+	disputeId,
+	onDone,
+}: {
+	disputeId: string;
+	onDone: () => void;
+}) => {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 
@@ -48,18 +66,13 @@ const ResolveForm = ({ disputeId }: { disputeId: string }) => {
 			loading: "Recording your decision…",
 			promise: mutateAsync({ ...values, disputeId }),
 			onSuccess: async () => {
-				await queryClient.invalidateQueries({
-					queryKey: QUERY_KEYS.ADMIN_DISPUTES,
-				});
-				await router.invalidate();
+				await refreshQuery(queryClient, router, [QUERY_KEYS.ADMIN_DISPUTES]);
+				onDone();
 			},
 		});
 
 	return (
-		<form
-			className="flex flex-col gap-3 sm:max-w-md"
-			onSubmit={handleSubmit(onSubmit)}
-		>
+		<form className="flex flex-col gap-3" onSubmit={handleSubmit(onSubmit)}>
 			<SelectField
 				id={`resolution-${disputeId}`}
 				label="Decision"
@@ -95,9 +108,16 @@ const ResolveForm = ({ disputeId }: { disputeId: string }) => {
 	);
 };
 
-export const DisputeActions = ({ dispute }: { dispute: AdminDispute }) => {
+const DisputeReviewDialog = ({
+	dispute,
+	onOpenChange,
+}: {
+	dispute: AdminDispute;
+	onOpenChange: (open: boolean) => void;
+}) => {
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	const open = isOpenDisputeStatus(dispute.status);
 
 	const { mutateAsync, isPending } = useMutation({
 		mutationFn: () => reviewDispute(dispute.id),
@@ -108,29 +128,77 @@ export const DisputeActions = ({ dispute }: { dispute: AdminDispute }) => {
 			loading: "Moving to review…",
 			promise: mutateAsync(),
 			onSuccess: async () => {
-				await queryClient.invalidateQueries({
-					queryKey: QUERY_KEYS.ADMIN_DISPUTES,
-				});
-				await router.invalidate();
+				await refreshQuery(queryClient, router, [QUERY_KEYS.ADMIN_DISPUTES]);
+				onOpenChange(false);
 			},
 		});
 
-	if (!isOpenDisputeStatus(dispute.status)) {
-		return (
-			<p className="text-muted-foreground text-sm">
-				Closed — no further action.
-			</p>
-		);
-	}
+	return (
+		<DialogContent>
+			<DialogHeader>
+				<DialogTitle className="flex items-center gap-2">
+					{humanize(dispute.reason)}
+					<StatusBadge status={dispute.status} />
+				</DialogTitle>
+				<DialogDescription>
+					{dispute.transaction.merchant_name} —{" "}
+					{formatZar(dispute.transaction.amount_cents)} on{" "}
+					{formatDate(dispute.transaction.transacted_at)}
+				</DialogDescription>
+			</DialogHeader>
 
-	if (dispute.status === DISPUTE_STATUS.SUBMITTED) {
-		return (
-			<Button size="sm" disabled={isPending} onClick={startReview}>
-				{isPending ? <Spinner /> : <SearchCheckIcon />}
-				Move to review
-			</Button>
-		);
-	}
+			<div className="flex flex-col gap-3">
+				<p className="text-muted-foreground text-xs">
+					Customer {dispute.user_id}
+				</p>
+				<p className="text-sm whitespace-pre-wrap">{dispute.description}</p>
 
-	return <ResolveForm disputeId={dispute.id} />;
+				{dispute.resolution_note && (
+					<p className="bg-muted rounded-md p-3 text-sm">
+						<span className="font-medium">Decision note: </span>
+						{dispute.resolution_note}
+					</p>
+				)}
+
+				{!open && (
+					<p className="text-muted-foreground text-sm">
+						Closed — no further action.
+					</p>
+				)}
+
+				{open && dispute.status === DISPUTE_STATUS.SUBMITTED && (
+					<Button size="sm" disabled={isPending} onClick={startReview}>
+						{isPending ? <Spinner /> : <SearchCheckIcon />}
+						Move to review
+					</Button>
+				)}
+
+				{open && dispute.status === DISPUTE_STATUS.UNDER_REVIEW && (
+					<ResolveForm
+						disputeId={dispute.id}
+						onDone={() => onOpenChange(false)}
+					/>
+				)}
+			</div>
+		</DialogContent>
+	);
+};
+
+export const DisputeActions = ({ dispute }: { dispute: AdminDispute }) => {
+	const [dialogOpen, setDialogOpen] = useState(false);
+	const open = isOpenDisputeStatus(dispute.status);
+
+	return (
+		<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+			<DialogTrigger asChild>
+				<Button variant={open ? "primary" : "ghost"} size="sm">
+					{open ? <SearchCheckIcon /> : <EyeIcon />}
+					{open ? "Review" : "View"}
+				</Button>
+			</DialogTrigger>
+			{dialogOpen && (
+				<DisputeReviewDialog dispute={dispute} onOpenChange={setDialogOpen} />
+			)}
+		</Dialog>
+	);
 };

@@ -18,6 +18,7 @@ import { SelectField, TextAreaField } from "@/components/custom/text-field";
 import { useFormField } from "@/hooks/use-form-field";
 import { useToastMutation } from "@/hooks/use-toast-mutation";
 import { humanize } from "@/lib/format";
+import { refreshQuery } from "@/lib/query";
 import type { ApiError } from "@/api";
 
 export const DisputeForm = ({ transactionId }: { transactionId: string }) => {
@@ -44,7 +45,7 @@ export const DisputeForm = ({ transactionId }: { transactionId: string }) => {
 			loading: "Opening your dispute…",
 			promise: mutateAsync(values),
 			onSuccess: async (response) => {
-				await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DISPUTES });
+				await refreshQuery(queryClient, router, [QUERY_KEYS.DISPUTES]);
 				await router.navigate({
 					to: "/disputes/$disputeId",
 					params: { disputeId: response.data.id },

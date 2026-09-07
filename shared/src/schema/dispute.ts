@@ -11,6 +11,7 @@ import {
 	disputeReasonSchema,
 	disputeResolutionSchema,
 	disputeStatusSchema,
+	integerSchema,
 	orderDirectionSchema,
 	stringSchema,
 	uuidSchema,
@@ -62,6 +63,17 @@ export const disputesQuerySchema = z.object({
 });
 
 /**
+ * The disputed transaction's own details, carried on every dispute response so
+ * a customer or reviewer can see what's actually being disputed without a
+ * second lookup by `transaction_id`.
+ */
+export const disputeTransactionSchema = z.object({
+	merchant_name: stringSchema.describe("Merchant the disputed payment was made to"),
+	amount_cents: integerSchema.describe("Amount in ZAR cents"),
+	transacted_at: stringSchema.describe("When the payment happened (ISO 8601)"),
+});
+
+/**
  * One dispute on the wire. Field names mirror the `dispute` table's columns
  * (`docs/decisions.md` #30) so there is no rename layer; timestamps are ISO
  * 8601 strings. `user_id` is omitted — it is always the caller.
@@ -69,6 +81,7 @@ export const disputesQuerySchema = z.object({
 export const disputeSchema = z.object({
 	id: uuidSchema,
 	transaction_id: uuidSchema,
+	transaction: disputeTransactionSchema,
 	status: disputeStatusSchema,
 	reason: disputeReasonSchema,
 	description: stringSchema.describe("The customer's account of the problem"),
