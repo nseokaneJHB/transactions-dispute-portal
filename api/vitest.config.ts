@@ -1,18 +1,18 @@
 import { defineConfig } from "vitest/config";
 
-const LOCAL_DATABASE_URL =
-	"postgresql://postgres:password@localhost:5432/transaction-dispute";
+import { testDatabaseUrl } from "./test/env.js";
 
 export default defineConfig({
 	test: {
 		include: ["test/**/*.test.ts"],
 		fileParallelism: false,
+		globalSetup: ["./test/global-setup.ts"],
 		hookTimeout: 30_000,
 		testTimeout: 20_000,
 		env: {
 			NODE_ENV: "test",
 			LOG_LEVEL: "error",
-			DATABASE_URL: process.env.DATABASE_URL ?? LOCAL_DATABASE_URL,
+			DATABASE_URL: testDatabaseUrl,
 			BETTER_AUTH_SECRET:
 				process.env.BETTER_AUTH_SECRET ??
 				"test-better-auth-secret-that-is-at-least-32-chars",
