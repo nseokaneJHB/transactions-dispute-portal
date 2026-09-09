@@ -11,9 +11,13 @@
 - [x] `/healthz` and `/readyz` exist — k8s manifests + probe wiring are documented in `docs/production-runbook.md` §7, not built (`docs/decisions.md` #42)
 - [x] One load-test number (p95 latency/RPS) is in the README — `autocannon` against `GET /v1/transactions`, dev stack, ~230 req/s / p97.5 171 ms; auth session-lookup identified as the ceiling
 - [x] `docker compose up -d` on a clean checkout gives a working local stack incl. DB, migrations applied, zero setup — `.env` files committed with working local values (`docs/decisions.md` #34/#42). No standalone `docker build`/`run` — production containerisation is `docs/production-runbook.md` §1, not built.
-- [ ] README build/run/test steps verified on a clean machine
-- [ ] CI green on default branch
+- [x] README build/run/test steps verified on a clean machine (fresh `git clone`: `docker compose up -d --wait` + `db:seed` gives the documented 31/4306/265 seed counts and all five endpoints respond; `pnpm install --frozen-lockfile` + `turbo lint typecheck build test` also green — 44/44 tests pass, dev DB untouched)
+- [x] CI green on default branch (build #18, `12924e0`, `.github/workflows/build.yml`)
 - [ ] Repo is public
+
+## Regression proof
+
+Full-suite regression re-run at `12924e0` (2026-09-09), in place (not a clean clone — that pass is the "clean machine" bullet above): `turbo run lint typecheck build test` across all three packages — 11/11 tasks green, 44/44 tests pass (36 api + 8 web), zero lint/typecheck errors. Dev database row counts checked before and after (31 users / 4,306 transactions / 265 disputes, unchanged) — the api test suite runs against its own isolated `transaction-dispute-test` database (`docs/decisions.md` #55), so it no longer touches the dev stack's seed data.
 
 ## Suggested pace
 
