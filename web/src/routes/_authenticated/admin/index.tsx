@@ -1,38 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
 
 import {
+	ADMIN_DISPUTE_SORT,
 	DISPUTE_STATUS,
-	DEFAULT_PAGE_LIMIT,
+	adminDisputesQuerySchema,
+	type DisputeStatus,
 } from "@transaction-dispute-portal/shared";
 
-import { adminDisputesRequest } from "@/api/admin";
+import { adminDisputeSummaryRequest, adminDisputesRequest } from "@/api/admin";
 import { QUERY_KEYS } from "@/api/constant";
 import { PageHeader } from "@/components/custom/page-header";
-import { Pagination } from "@/components/custom/pagination";
-import { EmptyState } from "@/components/custom/empty-state";
+import { DataList } from "@/components/custom/data-list";
+import { DisputeSummaryCards } from "@/components/custom/dispute-summary-cards";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { DisputeActions } from "@/components/admin/dispute-actions";
-import { Select } from "@/components/ui/select";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeaderCell,
-	TableRow,
-} from "@/components/ui/table";
 import { formatDate, formatZar, humanize } from "@/lib/format";
-
-const searchSchema = z.object({
-	page: z.coerce.number().int().positive().optional(),
-	status: z.enum(DISPUTE_STATUS).optional(),
-});
 
 const ReviewQueuePage = () => {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, page, count, limit } = Route.useLoaderData();
+	const { list, summary } = Route.useLoaderData();
+
+	const filterByStatus = (status: DisputeStatus | undefined) =>
+		navigate({ search: (prev) => ({ ...prev, page: 1, status }) });
 
 	return (
 		<div className="flex flex-col gap-5">
@@ -41,82 +31,67 @@ const ReviewQueuePage = () => {
 				description="Every customer dispute. Move submitted disputes into review, then resolve or reject them."
 			/>
 
-			<div className="flex items-center gap-3">
-				<label htmlFor="status" className="text-sm font-medium">
-					Status
-				</label>
-				<Select
-					id="status"
-					className="max-w-56"
-					value={search.status ?? ""}
-					onChange={(event) =>
-						navigate({
-							search: {
-								page: 1,
-								status:
-									(event.target.value as keyof typeof DISPUTE_STATUS) ||
-									undefined,
-							},
-						})
-					}
-				>
-					<option value="">All statuses</option>
-					{Object.values(DISPUTE_STATUS).map((value) => (
-						<option key={value} value={value}>
-							{humanize(value)}
-						</option>
-					))}
-				</Select>
-			</div>
+			<DisputeSummaryCards
+				counts={summary.data}
+				activeStatus={search.status}
+				onSelect={filterByStatus}
+			/>
 
-			{data.length === 0 ? (
-				<EmptyState title="Nothing in the queue" />
-			) : (
-				<Table>
-					<TableHead>
-						<tr>
-							<TableHeaderCell>Opened</TableHeaderCell>
-							<TableHeaderCell>Transaction</TableHeaderCell>
-							<TableHeaderCell>Reason</TableHeaderCell>
-							<TableHeaderCell>Status</TableHeaderCell>
-							<TableHeaderCell />
-						</tr>
-					</TableHead>
-					<TableBody>
-						{data.map((dispute) => (
-							<TableRow key={dispute.id}>
-								<TableCell className="text-muted-foreground whitespace-nowrap">
-									{formatDate(dispute.created_at)}
-								</TableCell>
-								<TableCell>
-									<span className="font-medium">
-										{dispute.transaction.merchant_name}
-									</span>
-									<span className="text-muted-foreground">
-										{" "}
-										{formatZar(dispute.transaction.amount_cents)}
-									</span>
-								</TableCell>
-								<TableCell className="font-medium">
-									{humanize(dispute.reason)}
-								</TableCell>
-								<TableCell>
-									<StatusBadge status={dispute.status} />
-								</TableCell>
-								<TableCell className="text-right">
-									<DisputeActions dispute={dispute} />
-								</TableCell>
-							</TableRow>
-						))}
-					</TableBody>
-				</Table>
-			)}
-
-			<Pagination
-				page={page}
-				limit={limit}
-				count={count}
-				onPageChange={(next) => navigate({ search: { ...search, page: next } })}
+			<DataList
+				result={list}
+				search={search}
+				onSearchChange={(next) => navigate({ search: next })}
+				searchPlaceholder="Customer, merchant or description"
+				statusOptions={Object.values(DISPUTE_STATUS)}
+				emptyState={{ title: "Nothing matches" }}
+				columns={[
+					{
+						header: "Customer",
+						sortKey: ADMIN_DISPUTE_SORT.customer,
+						cell: (dispute) => (
+							<>
+								<span className="font-medium">{dispute.customer.name}</span>
+								<span className="text-muted-foreground block text-xs">
+									{dispute.customer.email}
+								</span>
+							</>
+						),
+					},
+					{
+						header: "Merchant",
+						sortKey: ADMIN_DISPUTE_SORT.merchant,
+						cellClassName: "font-medium",
+						cell: (dispute) => dispute.transaction.merchant_name,
+					},
+					{
+						header: "Amount",
+						sortKey: ADMIN_DISPUTE_SORT.amount_cents,
+						align: "right",
+						cellClassName: "text-right tabular-nums",
+						cell: (dispute) => formatZar(dispute.transaction.amount_cents),
+					},
+					{
+						header: "Reason",
+						cellClassName: "font-medium",
+						cell: (dispute) => humanize(dispute.reason),
+					},
+					{
+						header: "Opened",
+						sortKey: ADMIN_DISPUTE_SORT.created_at,
+						cellClassName: "text-muted-foreground whitespace-nowrap",
+						cell: (dispute) => formatDate(dispute.created_at),
+					},
+					{
+						header: "Status",
+						sortKey: ADMIN_DISPUTE_SORT.status,
+						cell: (dispute) => <StatusBadge status={dispute.status} />,
+					},
+					{
+						header: "",
+						cellClassName: "text-right",
+						cell: (dispute) => <DisputeActions dispute={dispute} />,
+					},
+				]}
 			/>
 		</div>
 	);
@@ -124,12 +99,19 @@ const ReviewQueuePage = () => {
 
 export const Route = createFileRoute("/_authenticated/admin/")({
 	component: ReviewQueuePage,
-	validateSearch: searchSchema,
+	validateSearch: adminDisputesQuerySchema,
 	loaderDeps: ({ search }) => search,
-	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData({
-			queryKey: [...QUERY_KEYS.ADMIN_DISPUTES, deps],
-			queryFn: () =>
-				adminDisputesRequest({ data: { ...deps, limit: DEFAULT_PAGE_LIMIT } }),
-		}),
+	loader: async ({ context, deps }) => {
+		const [list, summary] = await Promise.all([
+			context.queryClient.ensureQueryData({
+				queryKey: [...QUERY_KEYS.ADMIN_DISPUTES, deps],
+				queryFn: () => adminDisputesRequest({ data: deps }),
+			}),
+			context.queryClient.ensureQueryData({
+				queryKey: QUERY_KEYS.ADMIN_DISPUTE_SUMMARY,
+				queryFn: () => adminDisputeSummaryRequest(),
+			}),
+		]);
+		return { list, summary };
+	},
 });

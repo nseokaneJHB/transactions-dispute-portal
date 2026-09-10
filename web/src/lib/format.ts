@@ -1,10 +1,6 @@
-import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 
-import {
-	DISPUTE_STATUS,
-	stringToTitleCase,
-	type DisputeStatus,
-} from "@transaction-dispute-portal/shared";
+import { stringToTitleCase } from "@transaction-dispute-portal/shared";
 
 const zarFormatter = new Intl.NumberFormat("en-ZA", {
 	style: "currency",
@@ -23,18 +19,5 @@ export const formatDate = (iso: string): string =>
 export const formatDateTime = (iso: string): string =>
 	format(parseISO(iso), "d MMM yyyy, HH:mm");
 
-/** `3 days ago` — relative time for list rows. */
-export const formatRelative = (iso: string): string =>
-	`${formatDistanceToNow(parseISO(iso))} ago`;
-
 /** Human label for any SCREAMING_SNAKE enum value (`UNDER_REVIEW` -> `Under Review`). */
 export const humanize = (value: string): string => stringToTitleCase(value);
-
-/** The Tailwind text colour token for each dispute status badge. */
-export const disputeStatusTone: Record<DisputeStatus, string> = {
-	[DISPUTE_STATUS.SUBMITTED]: "text-status-submitted",
-	[DISPUTE_STATUS.UNDER_REVIEW]: "text-status-under-review",
-	[DISPUTE_STATUS.RESOLVED]: "text-status-resolved",
-	[DISPUTE_STATUS.REJECTED]: "text-status-rejected",
-	[DISPUTE_STATUS.WITHDRAWN]: "text-status-withdrawn",
-};

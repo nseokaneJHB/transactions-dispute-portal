@@ -6,6 +6,37 @@ export const MAX_PAGE_LIMIT = 100 as const;
 
 export const ORDER_DIRECTION = { asc: "asc", desc: "desc" } as const;
 
+/**
+ * The columns each list endpoint allows `?sort=` to name. A whitelist, not a
+ * free string — an unlisted value is a `422`, never an interpolated column.
+ * `order` (`ORDER_DIRECTION`) picks the direction; these pick the column.
+ */
+export const TRANSACTION_SORT = {
+	transacted_at: "transacted_at",
+	merchant: "merchant",
+	amount_cents: "amount_cents",
+} as const;
+
+export const DISPUTE_SORT = {
+	created_at: "created_at",
+	merchant: "merchant",
+	amount_cents: "amount_cents",
+	status: "status",
+} as const;
+
+/** The review queue can also sort by the owning customer; a customer's own list can't. */
+export const ADMIN_DISPUTE_SORT = {
+	...DISPUTE_SORT,
+	customer: "customer",
+} as const;
+
+export const ADMIN_INVITE_SORT = {
+	email: "email",
+	status: "status",
+	created_at: "created_at",
+	expires_at: "expires_at",
+} as const;
+
 export const OTP = {
 	LENGTH: 6,
 	EXPIRY_MINUTES: 10,
@@ -43,16 +74,20 @@ export const OPEN_DISPUTE_STATUS = [
 	DISPUTE_STATUS.UNDER_REVIEW,
 ] as const;
 
-export const TERMINAL_DISPUTE_STATUS = [
-	DISPUTE_STATUS.RESOLVED,
-	DISPUTE_STATUS.REJECTED,
-	DISPUTE_STATUS.WITHDRAWN,
-] as const;
-
 export const ADMIN_RESOLUTION_STATUS = [
 	DISPUTE_STATUS.RESOLVED,
 	DISPUTE_STATUS.REJECTED,
 ] as const;
+
+/**
+ * Derived state of an admin invite — not a column. `PENDING` until it is either
+ * accepted (`ACCEPTED`) or passes `expires_at` unaccepted (`EXPIRED`).
+ */
+export const ADMIN_INVITE_STATUS = {
+	PENDING: "PENDING",
+	ACCEPTED: "ACCEPTED",
+	EXPIRED: "EXPIRED",
+} as const;
 
 export const AUTH_EVENT = {
 	OTP_REQUESTED: "OTP_REQUESTED",
@@ -80,8 +115,6 @@ export const FRONTEND_URLS = {
 	ADMIN_INVITE_ACCEPT: "/admin/invite",
 	CONFIRM_EMAIL_CHANGE: "/account/email-change",
 } as const;
-
-export type FrontendRedirectUrlPaths = typeof FRONTEND_URLS;
 
 /**
  * Standard HTTP response code constants.
@@ -137,14 +170,7 @@ export const HTTP_RESPONSE_CODE: Record<
  * Logical API namespaces — the top-level route groupings mounted in the
  * backend. `API_URLS` resolves each to its concrete (version-prefixed) base.
  */
-export const API_NAMESPACE = {
-	AUTH: "AUTH",
-	ADMIN: "ADMIN",
-	HEALTH: "HEALTH",
-	CUSTOMER: "CUSTOMER",
-} as const;
-
-export type ApiNamespace = keyof typeof API_NAMESPACE;
+export type ApiNamespace = "AUTH" | "ADMIN" | "HEALTH" | "CUSTOMER";
 
 /**
  * Resolve each API namespace to its concrete base path for a given version.
@@ -192,6 +218,7 @@ export const API_PATHS = {
 	DISPUTE_WITHDRAW: "/disputes/:disputeId/withdraw",
 
 	ADMIN_DISPUTES: "/disputes",
+	ADMIN_DISPUTE_SUMMARY: "/disputes/summary",
 	ADMIN_DISPUTE_REVIEW: "/disputes/:disputeId/review",
 	ADMIN_DISPUTE_RESOLVE: "/disputes/:disputeId/resolve",
 	ADMIN_INVITES: "/invites",

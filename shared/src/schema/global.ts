@@ -2,32 +2,52 @@ import { z } from "zod";
 
 import { DEFAULT_PAGE_LIMIT, DEFAULT_PAGE_NUMBER } from "../constant.js";
 
-import { stringSchema, numberSchema, httpCodeSchema, orderDirectionSchema } from "./field.js";
+import {
+	stringSchema,
+	numberSchema,
+	httpCodeSchema,
+	fromDateQuerySchema,
+	limitQuerySchema,
+	orderDirectionSchema,
+	pageQuerySchema,
+	searchQuerySchema,
+	toDateQuerySchema,
+} from "./field.js";
 
 /**
- * Generic global pagination query schema.
+ * The pagination, ordering, text-search and date-range keys every list query
+ * carries. Endpoints extend this with their own filters and a whitelisted
+ * `sort` column (`disputesQuerySchema`, `transactionsQuerySchema`,
+ * `adminInvitesQuerySchema`) rather than re-declaring `page` / `limit` /
+ * `order` / `search` / `from` / `to`.
  */
-export const paginationSortAndSearchQuerySchema = z
-	.object({
-		to: z.string().optional().describe("End date for filtering results"),
-		from: z.string().optional().describe("Start date for filtering results"),
-		sort: stringSchema.optional().describe("Field to sort results by"),
-		order: orderDirectionSchema.optional().describe("Sort order (ASC or DESC)"),
-		search: stringSchema.optional().describe("Search string to filter results"),
-		page: z
-			.string()
-			.default(`${DEFAULT_PAGE_NUMBER}`)
-			.describe("Page number of the results"),
-		limit: z
-			.string()
-			.default(`${DEFAULT_PAGE_LIMIT}`)
-			.describe("Number of items per page"),
-	})
-	.refine(
-		(data) =>
-			!data.from || !data.to || new Date(data.from) <= new Date(data.to),
-		"`from` must be before or equal to `to`",
-	);
+export const paginationQuerySchema = z.object({
+	page: pageQuerySchema,
+	limit: limitQuerySchema,
+	search: searchQuerySchema,
+	from: fromDateQuerySchema,
+	to: toDateQuerySchema,
+	order: orderDirectionSchema
+		.optional()
+		.describe(
+			"Sort direction on the chosen `sort` column — defaults to descending",
+		),
+});
+
+/**
+ * `from` must not fall after `to`. Applied as a `.refine()` on each concrete
+ * list query *after* its `.extend()` — a refined schema can't be extended
+ * further, so the shared predicate is applied last, per endpoint.
+ */
+export const isOrderedDateRange = (query: {
+	from?: string;
+	to?: string;
+}): boolean => !query.from || !query.to || query.from <= query.to;
+
+export const ORDERED_DATE_RANGE_ISSUE = {
+	path: ["from"],
+	message: "`from` must be on or before `to`",
+};
 
 /**
  * Generic global response schema — the default envelope for every API

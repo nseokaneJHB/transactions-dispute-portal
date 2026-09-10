@@ -1,25 +1,22 @@
 import { z } from "zod";
 
 import {
-	DEFAULT_PAGE_LIMIT,
-	DEFAULT_PAGE_NUMBER,
-	MAX_PAGE_LIMIT,
-	ORDER_DIRECTION,
-} from "../constant.js";
-
-import {
 	disputeReasonSchema,
 	disputeResolutionSchema,
 	disputeStatusSchema,
+	emailSchema,
 	integerSchema,
-	orderDirectionSchema,
 	stringSchema,
 	uuidSchema,
 } from "./field.js";
 import {
 	globalResponseSchema,
+	isOrderedDateRange,
+	ORDERED_DATE_RANGE_ISSUE,
 	paginatedGlobalResponseSchema,
+	paginationQuerySchema,
 } from "./global.js";
+import { ADMIN_DISPUTE_SORT, DISPUTE_SORT } from "../constant.js";
 
 /**
  * Body for `POST /v1/disputes` — open a dispute on one of the caller's own
@@ -36,34 +33,46 @@ export const disputeCreateBodySchema = z.object({
 });
 
 /**
- * Query for `GET /v1/disputes` — a page of the caller's disputes, newest first,
- * optionally narrowed to a single status. `page` / `limit` are coerced from
- * their string query form.
+ * Shared filters for `GET /v1/disputes` and `GET /v1/admin/disputes` — status,
+ * transaction, and (from `paginationQuerySchema`) `search` / `from` / `to` /
+ * pagination. `search` matches the dispute description and the disputed
+ * merchant, plus — on the admin route only — the customer's name and email.
+ * The two routes differ only in their `sort` whitelist, so `sort` is added per
+ * route below.
  */
-export const disputesQuerySchema = z.object({
+const disputesQueryBase = paginationQuerySchema.extend({
 	status: disputeStatusSchema
 		.optional()
 		.describe("Only disputes currently in this status"),
 	transaction_id: uuidSchema
 		.optional()
 		.describe("Only disputes raised against this transaction"),
-	order: orderDirectionSchema
-		.default(ORDER_DIRECTION.desc)
-		.describe("Sort direction on created_at"),
-	page: z.coerce
-		.number()
-		.int()
-		.positive()
-		.default(DEFAULT_PAGE_NUMBER)
-		.describe("1-based page number"),
-	limit: z.coerce
-		.number()
-		.int()
-		.positive()
-		.max(MAX_PAGE_LIMIT)
-		.default(DEFAULT_PAGE_LIMIT)
-		.describe("Items per page"),
 });
+
+/** Query for `GET /v1/disputes` — the caller's own disputes. */
+export const disputesQuerySchema = disputesQueryBase
+	.extend({
+		sort: z
+			.enum(DISPUTE_SORT)
+			.optional()
+			.describe("Column to sort the page by — defaults to `created_at`"),
+	})
+	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE);
+
+/**
+ * Query for `GET /v1/admin/disputes` — the review queue. Same filters as
+ * `disputesQuerySchema` but `sort` also accepts `customer`, since a reviewer
+ * (unlike a customer looking at their own list) benefits from grouping one
+ * person's disputes together.
+ */
+export const adminDisputesQuerySchema = disputesQueryBase
+	.extend({
+		sort: z
+			.enum(ADMIN_DISPUTE_SORT)
+			.optional()
+			.describe("Column to sort the page by — defaults to `created_at`"),
+	})
+	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE);
 
 /**
  * The disputed transaction's own details, carried on every dispute response so
@@ -109,11 +118,23 @@ export const disputeListResponseSchema = paginatedGlobalResponseSchema.extend({
 });
 
 /**
- * One dispute on the admin wire — the customer shape plus `user_id`, since a
- * reviewer is not the owner and needs to know whose dispute it is.
+ * The dispute owner's own details, carried on every admin dispute response so a
+ * reviewer can see whose money they are deciding on — and spot a repeat filer —
+ * without a second lookup by `user_id`.
+ */
+export const disputeCustomerSchema = z.object({
+	name: stringSchema.describe("The customer's name"),
+	email: emailSchema.describe("The customer's sign-in email"),
+});
+
+/**
+ * One dispute on the admin wire — the customer shape plus `user_id` and the
+ * owning customer's `name` / `email`, since a reviewer is not the owner and
+ * needs to know whose dispute it is.
  */
 export const adminDisputeSchema = disputeSchema.extend({
 	user_id: uuidSchema.describe("The customer who opened the dispute"),
+	customer: disputeCustomerSchema,
 });
 
 /**
@@ -137,4 +158,18 @@ export const adminDisputeResponseSchema = globalResponseSchema.extend({
 /** Response for `GET /v1/admin/disputes` — one page of disputes for review. */
 export const adminDisputeListResponseSchema = paginatedGlobalResponseSchema.extend({
 	data: z.array(adminDisputeSchema),
+});
+
+/**
+ * A live count of every dispute in each lifecycle status — unfiltered, the
+ * whole picture for the review-queue stat cards. Every status key is present,
+ * `0` included.
+ */
+export const disputeStatusCountsSchema = z
+	.record(disputeStatusSchema, integerSchema)
+	.describe("Count of disputes in each status");
+
+/** Response for `GET /v1/admin/disputes/summary`. */
+export const adminDisputeSummaryResponseSchema = globalResponseSchema.extend({
+	data: disputeStatusCountsSchema,
 });

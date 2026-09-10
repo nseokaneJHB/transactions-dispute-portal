@@ -64,4 +64,4 @@ if (isProduction) {
 	};
 }
 
-export const { close, client, connection } = databaseInstance;
+export const { close, connection } = databaseInstance;

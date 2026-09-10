@@ -8,16 +8,36 @@ import {
 	adminInviteCreateBodySchema,
 	adminInviteAcceptBodySchema,
 	adminInviteTokenParamsSchema,
+	adminInvitesQuerySchema,
 	adminInviteResponseSchema,
+	adminInviteListResponseSchema,
 } from "@transaction-dispute-portal/shared";
 
-import { acceptInvite, sendInvite } from "./service.js";
+import { acceptInvite, listInvites, sendInvite } from "./service.js";
 
 const ACCEPT_RATE_LIMIT = { max: OTP.MAX_ATTEMPTS * 2 };
 
 export const route: FastifyPluginAsync = async (
 	app: FastifyInstance,
 ): Promise<void> => {
+	app.route({
+		method: "GET",
+		url: API_PATHS.ADMIN_INVITES,
+		handler: listInvites,
+		preHandler: [app.authenticate, app.authorize(USER_ROLE.ADMIN)],
+		schema: {
+			querystring: adminInvitesQuerySchema,
+			response: {
+				200: adminInviteListResponseSchema,
+				401: globalResponseSchema,
+				403: globalResponseSchema,
+				422: globalResponseSchema,
+				429: globalResponseSchema,
+				500: globalResponseSchema,
+			},
+		},
+	});
+
 	app.route({
 		method: "POST",
 		url: API_PATHS.ADMIN_INVITES,

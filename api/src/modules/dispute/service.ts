@@ -17,6 +17,8 @@ import {
 } from "../../database/repository/index.js";
 import type { DisputeRow } from "../../database/repository/dispute.js";
 
+import { paginatedResponse } from "../../lib/paginated-response.js";
+
 import type {
 	GetDisputeRequest,
 	ListDisputesRequest,
@@ -92,33 +94,19 @@ export const listDisputes = async (
 	request: FastifyRequest<ListDisputesRequest>,
 	reply: FastifyReply<ListDisputesRequest>,
 ): Promise<void> => {
-	const {
-		status: statusFilter,
-		transaction_id: transactionId,
-		order,
-		page,
-		limit,
-	} = request.query;
-
 	const { rows, total } = await findDisputesByUser(request.server.connection, {
+		...request.query,
 		userId: request.user!.id,
-		status: statusFilter,
-		transactionId,
-		order,
-		page,
-		limit,
 	});
 
-	const { status, code } = HTTP_RESPONSE_CODE.OK;
-	return reply.status(status).send({
-		code,
-		page,
-		limit,
-		count: total,
-		total: rows.length,
-		message: "Disputes retrieved.",
-		data: rows.map(toWire),
-	});
+	return reply.status(HTTP_RESPONSE_CODE.OK.status).send(
+		paginatedResponse({
+			query: request.query,
+			total,
+			rows: rows.map(toWire),
+			message: "Disputes retrieved.",
+		}),
+	);
 };
 
 /** `POST /v1/disputes/:disputeId/withdraw` — the caller closes their own open dispute. */

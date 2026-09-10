@@ -1,4 +1,4 @@
-import { OPEN_DISPUTE_STATUS, TERMINAL_DISPUTE_STATUS } from "./constant.js";
+import { OPEN_DISPUTE_STATUS } from "./constant.js";
 
 /**
  * Extract the literal names of every `:param` segment in a route pattern as a
@@ -39,18 +39,12 @@ export const buildUrlWithParams = <T extends string>(
 
 /**
  * Whether a dispute status is one a customer or admin can still act on
- * (`SUBMITTED` / `UNDER_REVIEW`). The single source of the open/closed
- * partition — route handlers must not re-derive it inline.
+ * (`SUBMITTED` / `UNDER_REVIEW`), as opposed to a terminal one. The single
+ * source of the open/closed partition — route handlers must not re-derive it
+ * inline.
  */
 export const isOpenDisputeStatus = (status: string): boolean =>
 	(OPEN_DISPUTE_STATUS as readonly string[]).includes(status);
-
-/**
- * Whether a dispute status is terminal (`RESOLVED` / `REJECTED` / `WITHDRAWN`)
- * — the complement of {@link isOpenDisputeStatus}.
- */
-export const isTerminalDisputeStatus = (status: string): boolean =>
-	(TERMINAL_DISPUTE_STATUS as readonly string[]).includes(status);
 
 /**
  * Convert a string to Title Case, treating underscores, hyphens, and

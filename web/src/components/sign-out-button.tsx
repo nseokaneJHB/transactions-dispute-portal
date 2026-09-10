@@ -7,7 +7,7 @@ import { FRONTEND_URLS } from "@transaction-dispute-portal/shared";
 import { signOut } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useToastMutation } from "@/hooks/use-toast-mutation";
+import { runToastMutation } from "@/lib/toast-mutation";
 
 export const SignOutButton = () => {
 	const router = useRouter();
@@ -16,7 +16,7 @@ export const SignOutButton = () => {
 	const { mutateAsync, isPending } = useMutation({ mutationFn: signOut });
 
 	const handleSignOut = () => {
-		useToastMutation({
+		runToastMutation({
 			loading: "Signing out…",
 			promise: mutateAsync(),
 			onSuccess: async () => {

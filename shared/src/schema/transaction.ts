@@ -1,59 +1,30 @@
 import { z } from "zod";
 
-import {
-	DEFAULT_PAGE_LIMIT,
-	DEFAULT_PAGE_NUMBER,
-	MAX_PAGE_LIMIT,
-	ORDER_DIRECTION,
-} from "../constant.js";
+import { TRANSACTION_SORT } from "../constant.js";
 
-import {
-	integerSchema,
-	orderDirectionSchema,
-	stringSchema,
-	uuidSchema,
-} from "./field.js";
+import { integerSchema, stringSchema, uuidSchema } from "./field.js";
 import {
 	globalResponseSchema,
+	isOrderedDateRange,
+	ORDERED_DATE_RANGE_ISSUE,
 	paginatedGlobalResponseSchema,
+	paginationQuerySchema,
 } from "./global.js";
 
 /**
- * Query for `GET /v1/transactions` — a page of the caller's transactions,
- * optionally bounded by a `transacted_at` date range and ordered on that
- * column. `page` / `limit` are coerced from their string query form.
+ * Query for `GET /v1/transactions` — a page of the caller's transactions.
+ * `search` matches the merchant name; `from` / `to` bound `transacted_at`; `sort`
+ * picks the column (`order` its direction). Everything but `sort` is inherited
+ * from `paginationQuerySchema`.
  */
-export const transactionsQuerySchema = z
-	.object({
-		from: z.iso
-			.date()
+export const transactionsQuerySchema = paginationQuerySchema
+	.extend({
+		sort: z
+			.enum(TRANSACTION_SORT)
 			.optional()
-			.describe("Earliest transaction date, inclusive (YYYY-MM-DD)"),
-		to: z.iso
-			.date()
-			.optional()
-			.describe("Latest transaction date, inclusive (YYYY-MM-DD)"),
-		order: orderDirectionSchema
-			.default(ORDER_DIRECTION.desc)
-			.describe("Sort direction on transacted_at"),
-		page: z.coerce
-			.number()
-			.int()
-			.positive()
-			.default(DEFAULT_PAGE_NUMBER)
-			.describe("1-based page number"),
-		limit: z.coerce
-			.number()
-			.int()
-			.positive()
-			.max(MAX_PAGE_LIMIT)
-			.default(DEFAULT_PAGE_LIMIT)
-			.describe("Items per page"),
+			.describe("Column to sort the page by — defaults to `transacted_at`"),
 	})
-	.refine((query) => !query.from || !query.to || query.from <= query.to, {
-		path: ["from"],
-		message: "`from` must be on or before `to`",
-	});
+	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE);
 
 /**
  * One transaction on the wire. Field names mirror the `transaction` table's

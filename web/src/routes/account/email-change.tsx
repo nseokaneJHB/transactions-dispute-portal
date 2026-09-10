@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useToastMutation } from "@/hooks/use-toast-mutation";
+import { runToastMutation } from "@/lib/toast-mutation";
 
 const searchSchema = z.object({ token: z.string().optional() });
 
@@ -27,7 +27,7 @@ const EmailChangePage = () => {
 
 	const confirm = () => {
 		if (!token) return;
-		useToastMutation({
+		runToastMutation({
 			loading: "Confirming this step…",
 			promise: mutateAsync({ token }),
 		});

@@ -4,40 +4,24 @@ import pino from "pino";
 
 import { env } from "./env.js";
 
-type LoggerConfig = Record<
-	"development" | "test" | "production",
-	pino.LoggerOptions & FastifyLoggerOptions
->;
+type LoggerOptions = pino.LoggerOptions & FastifyLoggerOptions;
 
-const formatters = {
-	level: (label: string) => ({ level: label }),
+const base: LoggerOptions = {
+	level: env.LOG_LEVEL,
+	timestamp: pino.stdTimeFunctions.isoTime,
+	formatters: { level: (label: string) => ({ level: label }) },
 };
 
-const loggerConfig: LoggerConfig = {
-	development: {
-		formatters,
-		level: env.LOG_LEVEL,
-		timestamp: pino.stdTimeFunctions.isoTime,
-		transport: {
-			target: "pino-pretty",
-			options: {
-				colorize: true,
-				translateTime: "SYS:HH:MM:ss",
-			},
-		},
-	},
-	test: {
-		formatters,
-		level: env.LOG_LEVEL,
-		timestamp: pino.stdTimeFunctions.isoTime,
-	},
-	production: {
-		formatters,
-		level: env.LOG_LEVEL,
-		timestamp: pino.stdTimeFunctions.isoTime,
-	},
-};
+/** Pretty, colourised output in development; plain JSON everywhere else. */
+const options: LoggerOptions =
+	env.NODE_ENV === "development"
+		? {
+				...base,
+				transport: {
+					target: "pino-pretty",
+					options: { colorize: true, translateTime: "SYS:HH:MM:ss" },
+				},
+			}
+		: base;
 
-export const config = loggerConfig[env.NODE_ENV] ?? loggerConfig.production;
-
-export const logger = pino(config);
+export const logger = pino(options);

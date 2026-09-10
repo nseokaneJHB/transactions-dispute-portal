@@ -14,6 +14,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 
 - `docs/decisions.md` — the "why did you..." log: problem, decision, alternatives actually considered, how it solves the problem. Add an entry here the moment a real design decision gets made, not after.
 - `docs/codebase-index.md` — per-file map of the repo (what lives where). Check before grepping/exploring the tree from scratch. Not yet populated — fill it in as `api`/`web`/`shared` get scaffolded.
+- `docs/flows.md` — every user-facing flow walked end to end: role, screens, API calls, DB changes, side effects. Read for *how the system behaves*; `decisions.md` for *why*.
 - `docs/brief.md` — what this is, the brief, and why each non-trivial decision exists (JD mapping)
 - `docs/api.md` — the API surface (public + admin), versioned under `/v1/`, error shape
 - `docs/domain-model.md` — entities, dispute lifecycle, seed data requirements, non-functional requirements

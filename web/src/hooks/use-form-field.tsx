@@ -10,7 +10,6 @@ import {
 interface UseFormFieldProps<TFieldValues extends FieldValues> {
 	name: Path<TFieldValues>;
 	control: Control<TFieldValues>;
-	type?: "string" | "select";
 }
 
 type DomChangeHandler = (
@@ -19,48 +18,24 @@ type DomChangeHandler = (
 	>,
 ) => void;
 
-interface FieldResult<TValue, TOnChange> {
-	value: TValue;
-	onChange: TOnChange;
-	loading: boolean;
-	error: string | undefined;
-}
-
-export function useFormField<TFieldValues extends FieldValues>(
-	props: UseFormFieldProps<TFieldValues> & { type: "select" },
-): FieldResult<string, (value: string) => void>;
-
-export function useFormField<TFieldValues extends FieldValues>(
-	props: UseFormFieldProps<TFieldValues> & { type?: "string" },
-): FieldResult<string, DomChangeHandler>;
-
-export function useFormField<TFieldValues extends FieldValues>({
+/**
+ * Bridge a `react-hook-form` field to the custom `TextField` / `SelectField` /
+ * `TextAreaField` components — hands back the field's `value`, a DOM `onChange`,
+ * and its validation `error`.
+ */
+export const useFormField = <TFieldValues extends FieldValues>({
 	name,
 	control,
-	type = "string",
-}: UseFormFieldProps<TFieldValues>) {
-	const { field, fieldState, formState } = useController({ name, control });
-
-	const base = {
-		loading: formState.isSubmitting,
-		error: fieldState.error?.message,
-	};
-
-	if (type === "select") {
-		return {
-			...base,
-			value: (field.value as string | undefined) ?? "",
-			onChange: (value: string) => field.onChange(value),
-		};
-	}
+}: UseFormFieldProps<TFieldValues>): {
+	value: string;
+	onChange: DomChangeHandler;
+	error: string | undefined;
+} => {
+	const { field, fieldState } = useController({ name, control });
 
 	return {
-		...base,
 		value: (field.value as string | undefined) ?? "",
-		onChange: (
-			event: ChangeEvent<
-				HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-			>,
-		) => field.onChange(event.target.value),
+		error: fieldState.error?.message,
+		onChange: (event) => field.onChange(event.target.value),
 	};
-}
+};

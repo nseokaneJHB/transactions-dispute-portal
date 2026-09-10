@@ -1,39 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { z } from "zod";
 import { ChevronRightIcon, ScaleIcon } from "lucide-react";
 
 import {
+	DISPUTE_SORT,
 	DISPUTE_STATUS,
-	DEFAULT_PAGE_LIMIT,
+	disputesQuerySchema,
 } from "@transaction-dispute-portal/shared";
 
 import { disputesRequest } from "@/api/dispute";
 import { QUERY_KEYS } from "@/api/constant";
 import { PageHeader } from "@/components/custom/page-header";
-import { Pagination } from "@/components/custom/pagination";
-import { EmptyState } from "@/components/custom/empty-state";
+import { DataList } from "@/components/custom/data-list";
 import { StatusBadge } from "@/components/custom/status-badge";
-import { Select } from "@/components/ui/select";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeaderCell,
-	TableRow,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatZar, humanize } from "@/lib/format";
-
-const searchSchema = z.object({
-	page: z.coerce.number().int().positive().optional(),
-	status: z.enum(DISPUTE_STATUS).optional(),
-});
 
 const DisputesPage = () => {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data, page, count, limit } = Route.useLoaderData();
+	const result = Route.useLoaderData();
 
 	return (
 		<div className="flex flex-col gap-5">
@@ -42,99 +27,68 @@ const DisputesPage = () => {
 				description="A record of every dispute you've raised and where it stands."
 			/>
 
-			<div className="flex items-center gap-3">
-				<label htmlFor="status" className="text-sm font-medium">
-					Status
-				</label>
-				<Select
-					id="status"
-					className="max-w-56"
-					value={search.status ?? ""}
-					onChange={(event) =>
-						navigate({
-							search: {
-								page: 1,
-								status:
-									(event.target.value as keyof typeof DISPUTE_STATUS) ||
-									undefined,
-							},
-						})
-					}
-				>
-					<option value="">All statuses</option>
-					{Object.values(DISPUTE_STATUS).map((value) => (
-						<option key={value} value={value}>
-							{humanize(value)}
-						</option>
-					))}
-				</Select>
-			</div>
-
-			{data.length === 0 ? (
-				<EmptyState
-					icon={ScaleIcon}
-					title="No disputes yet"
-					description="When you dispute a transaction it will show up here."
-					action={
+			<DataList
+				result={result}
+				search={search}
+				onSearchChange={(next) => navigate({ search: next })}
+				searchPlaceholder="Merchant or description"
+				statusOptions={Object.values(DISPUTE_STATUS)}
+				emptyState={{
+					icon: ScaleIcon,
+					title: "No disputes match",
+					description: "When you dispute a transaction it will show up here.",
+					action: (
 						<Button asChild variant="secondary">
 							<Link to="/transactions">Go to transactions</Link>
 						</Button>
-					}
-				/>
-			) : (
-				<Table>
-					<TableHead>
-						<tr>
-							<TableHeaderCell>Opened</TableHeaderCell>
-							<TableHeaderCell>Transaction</TableHeaderCell>
-							<TableHeaderCell>Reason</TableHeaderCell>
-							<TableHeaderCell>Status</TableHeaderCell>
-							<TableHeaderCell />
-						</tr>
-					</TableHead>
-					<TableBody>
-						{data.map((dispute) => (
-							<TableRow key={dispute.id}>
-								<TableCell className="text-muted-foreground whitespace-nowrap">
-									{formatDate(dispute.created_at)}
-								</TableCell>
-								<TableCell>
-									<span className="font-medium">
-										{dispute.transaction.merchant_name}
-									</span>
-									<span className="text-muted-foreground">
-										{" "}
-										{formatZar(dispute.transaction.amount_cents)}
-									</span>
-								</TableCell>
-								<TableCell className="font-medium">
-									{humanize(dispute.reason)}
-								</TableCell>
-								<TableCell>
-									<StatusBadge status={dispute.status} />
-								</TableCell>
-								<TableCell className="text-right">
-									<Button asChild variant="ghost" size="sm">
-										<Link
-											to="/disputes/$disputeId"
-											params={{ disputeId: dispute.id }}
-										>
-											View
-											<ChevronRightIcon />
-										</Link>
-									</Button>
-								</TableCell>
-							</TableRow>
-						))}
-					</TableBody>
-				</Table>
-			)}
-
-			<Pagination
-				page={page}
-				limit={limit}
-				count={count}
-				onPageChange={(next) => navigate({ search: { ...search, page: next } })}
+					),
+				}}
+				columns={[
+					{
+						header: "Merchant",
+						sortKey: DISPUTE_SORT.merchant,
+						cellClassName: "font-medium",
+						cell: (dispute) => dispute.transaction.merchant_name,
+					},
+					{
+						header: "Amount",
+						sortKey: DISPUTE_SORT.amount_cents,
+						align: "right",
+						cellClassName: "text-right tabular-nums",
+						cell: (dispute) => formatZar(dispute.transaction.amount_cents),
+					},
+					{
+						header: "Reason",
+						cellClassName: "font-medium",
+						cell: (dispute) => humanize(dispute.reason),
+					},
+					{
+						header: "Opened",
+						sortKey: DISPUTE_SORT.created_at,
+						cellClassName: "text-muted-foreground whitespace-nowrap",
+						cell: (dispute) => formatDate(dispute.created_at),
+					},
+					{
+						header: "Status",
+						sortKey: DISPUTE_SORT.status,
+						cell: (dispute) => <StatusBadge status={dispute.status} />,
+					},
+					{
+						header: "",
+						cellClassName: "text-right",
+						cell: (dispute) => (
+							<Button asChild variant="secondary" size="sm">
+								<Link
+									to="/disputes/$disputeId"
+									params={{ disputeId: dispute.id }}
+								>
+									View
+									<ChevronRightIcon />
+								</Link>
+							</Button>
+						),
+					},
+				]}
 			/>
 		</div>
 	);
@@ -142,12 +96,11 @@ const DisputesPage = () => {
 
 export const Route = createFileRoute("/_authenticated/disputes/")({
 	component: DisputesPage,
-	validateSearch: searchSchema,
+	validateSearch: disputesQuerySchema,
 	loaderDeps: ({ search }) => search,
 	loader: ({ context, deps }) =>
 		context.queryClient.ensureQueryData({
 			queryKey: [...QUERY_KEYS.DISPUTES, deps],
-			queryFn: () =>
-				disputesRequest({ data: { ...deps, limit: DEFAULT_PAGE_LIMIT } }),
+			queryFn: () => disputesRequest({ data: deps }),
 		}),
 });

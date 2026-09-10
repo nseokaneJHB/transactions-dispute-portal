@@ -3,23 +3,25 @@ import { z } from "zod";
 import {
 	disputeSchema,
 	disputesQuerySchema,
+	adminDisputesQuerySchema,
 	disputeCreateBodySchema,
 	disputeResponseSchema,
 	disputeListResponseSchema,
-	disputeTransactionSchema,
 	adminDisputeSchema,
 	disputeResolveBodySchema,
 	adminDisputeResponseSchema,
 	adminDisputeListResponseSchema,
+	disputeStatusCountsSchema,
+	adminDisputeSummaryResponseSchema,
 } from "../schema/dispute.js";
 
 export type DisputeCreateBody = z.infer<typeof disputeCreateBodySchema>;
 
 export type DisputesQuery = z.infer<typeof disputesQuerySchema>;
 
-export type Dispute = z.infer<typeof disputeSchema>;
+export type AdminDisputesQuery = z.infer<typeof adminDisputesQuerySchema>;
 
-export type DisputeTransaction = z.infer<typeof disputeTransactionSchema>;
+export type Dispute = z.infer<typeof disputeSchema>;
 
 export type DisputeResponse = z.infer<typeof disputeResponseSchema>;
 
@@ -33,4 +35,10 @@ export type AdminDisputeResponse = z.infer<typeof adminDisputeResponseSchema>;
 
 export type AdminDisputeListResponse = z.infer<
 	typeof adminDisputeListResponseSchema
+>;
+
+export type DisputeStatusCounts = z.infer<typeof disputeStatusCountsSchema>;
+
+export type AdminDisputeSummaryResponse = z.infer<
+	typeof adminDisputeSummaryResponseSchema
 >;
