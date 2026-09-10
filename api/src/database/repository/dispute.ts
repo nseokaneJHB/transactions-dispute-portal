@@ -62,6 +62,7 @@ export type AdminDisputeRow = DisputeModelSelect & {
 interface FindManyOptions {
 	userId: string;
 	status?: DisputeStatus;
+	transactionId?: string;
 	page: number;
 	limit: number;
 	order: OrderDirection;
@@ -101,6 +102,9 @@ export const findDisputesByUser = async (
 	const where = and(
 		eq(DisputeModel.user_id, options.userId),
 		options.status ? eq(DisputeModel.status, options.status) : undefined,
+		options.transactionId
+			? eq(DisputeModel.transaction_id, options.transactionId)
+			: undefined,
 	);
 
 	const direction = options.order === ORDER_DIRECTION.asc ? asc : desc;

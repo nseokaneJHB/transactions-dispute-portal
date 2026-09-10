@@ -44,6 +44,9 @@ export const disputesQuerySchema = z.object({
 	status: disputeStatusSchema
 		.optional()
 		.describe("Only disputes currently in this status"),
+	transaction_id: uuidSchema
+		.optional()
+		.describe("Only disputes raised against this transaction"),
 	order: orderDirectionSchema
 		.default(ORDER_DIRECTION.desc)
 		.describe("Sort direction on created_at"),

@@ -8,7 +8,7 @@ import {
 	type TransactionListResponse,
 } from "@transaction-dispute-portal/shared";
 
-import { api } from "@/api";
+import { api, rejectNotFound } from "@/api";
 import { forwardCookie } from "@/api/server";
 
 import { env } from "@/lib/env";
@@ -36,11 +36,15 @@ export const transactionsRequest = createServerFn({ method: "GET" })
 export const transactionRequest = createServerFn({ method: "GET" })
 	.inputValidator((transactionId: string) => transactionId)
 	.handler(async ({ data: transactionId }): Promise<TransactionResponse> => {
-		const { data } = await api.get<TransactionResponse>(
-			buildUrlWithParams(`${customerUrl}${API_PATHS.TRANSACTION_DETAIL}`, {
-				transactionId,
-			}),
-			forwardCookie(),
-		);
-		return data;
+		try {
+			const { data } = await api.get<TransactionResponse>(
+				buildUrlWithParams(`${customerUrl}${API_PATHS.TRANSACTION_DETAIL}`, {
+					transactionId,
+				}),
+				forwardCookie(),
+			);
+			return data;
+		} catch (error) {
+			return rejectNotFound(error);
+		}
 	});

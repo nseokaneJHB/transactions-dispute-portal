@@ -1,4 +1,5 @@
 import axios, { AxiosError } from "axios";
+import { notFound } from "@tanstack/react-router";
 
 import type { GlobalResponse } from "@transaction-dispute-portal/shared";
 
@@ -69,6 +70,20 @@ export const normalizeAxiosError = (error: AxiosError<unknown>): ApiError => {
 			? "Can't reach the server. Check your connection and try again."
 			: (error.message ?? "Something went wrong. Please try again."),
 	});
+};
+
+/**
+ * A `createServerFn` boundary crossing only round-trips `notFound()`/`redirect()`
+ * values intact — a thrown `Error` subclass loses every custom field but
+ * `.message` (TanStack Start's RPC serializer special-cases just those two).
+ * So a single-entity lookup's 404 has to convert to `notFound()` here, while
+ * the `ApiError` is still the real thing, server-side, before it crosses.
+ */
+export const rejectNotFound = (error: unknown): never => {
+	if (isApiError(error) && error.status === 404) {
+		throw notFound();
+	}
+	throw error;
 };
 
 const isServer = typeof window === "undefined";
