@@ -5,7 +5,7 @@ import type { GlobalResponse } from "@transaction-dispute-portal/shared";
 
 import { env } from "@/lib/env";
 
-export const CLIENT_ERROR = {
+const CLIENT_ERROR = {
 	NETWORK_ERROR: "NETWORK_ERROR",
 	UNKNOWN_ERROR: "UNKNOWN_ERROR",
 } as const;
@@ -13,7 +13,7 @@ export const CLIENT_ERROR = {
 type ClientErrorCode = (typeof CLIENT_ERROR)[keyof typeof CLIENT_ERROR];
 
 /** The normalized shape every failed request rejects with. */
-export interface ApiErrorResponse {
+interface ApiErrorResponse {
 	status: number;
 	message: string;
 	code: GlobalResponse["code"] | ClientErrorCode | string;

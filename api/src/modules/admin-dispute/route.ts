@@ -5,13 +5,15 @@ import {
 	API_PATHS,
 	uuidParamsSchema,
 	globalResponseSchema,
-	disputesQuerySchema,
+	adminDisputesQuerySchema,
 	disputeResolveBodySchema,
 	adminDisputeResponseSchema,
 	adminDisputeListResponseSchema,
+	adminDisputeSummaryResponseSchema,
 } from "@transaction-dispute-portal/shared";
 
 import {
+	getDisputeSummary,
 	listDisputesForReview,
 	resolveDisputeForReview,
 	startDisputeReview,
@@ -26,12 +28,28 @@ export const route: FastifyPluginAsync = async (
 		handler: listDisputesForReview,
 		preHandler: [app.authenticate, app.authorize(USER_ROLE.ADMIN)],
 		schema: {
-			querystring: disputesQuerySchema,
+			querystring: adminDisputesQuerySchema,
 			response: {
 				200: adminDisputeListResponseSchema,
 				401: globalResponseSchema,
 				403: globalResponseSchema,
 				422: globalResponseSchema,
+				429: globalResponseSchema,
+				500: globalResponseSchema,
+			},
+		},
+	});
+
+	app.route({
+		method: "GET",
+		url: API_PATHS.ADMIN_DISPUTE_SUMMARY,
+		handler: getDisputeSummary,
+		preHandler: [app.authenticate, app.authorize(USER_ROLE.ADMIN)],
+		schema: {
+			response: {
+				200: adminDisputeSummaryResponseSchema,
+				401: globalResponseSchema,
+				403: globalResponseSchema,
 				429: globalResponseSchema,
 				500: globalResponseSchema,
 			},

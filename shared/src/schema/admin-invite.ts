@@ -1,7 +1,19 @@
 import { z } from "zod";
 
-import { emailSchema, stringSchema, uuidSchema } from "./field.js";
-import { globalResponseSchema } from "./global.js";
+import {
+	adminInviteStatusSchema,
+	emailSchema,
+	stringSchema,
+	uuidSchema,
+} from "./field.js";
+import {
+	globalResponseSchema,
+	isOrderedDateRange,
+	ORDERED_DATE_RANGE_ISSUE,
+	paginatedGlobalResponseSchema,
+	paginationQuerySchema,
+} from "./global.js";
+import { ADMIN_INVITE_SORT } from "../constant.js";
 
 /**
  * Body for `POST /v1/admin/invites` — an existing admin invites a new admin by
@@ -30,12 +42,35 @@ export const adminInviteTokenParamsSchema = z.object({
 });
 
 /**
+ * Query for `GET /v1/admin/invites` — a page of the calling admin's own
+ * invites, optionally narrowed to one derived `status`. `status` is not a
+ * column, so the server translates it to a predicate over `accepted_at` /
+ * `expires_at`. `search` matches the invitee email; `from` / `to` bound
+ * `created_at`; `sort` picks the column. Everything but `sort` is inherited
+ * from `paginationQuerySchema`.
+ */
+export const adminInvitesQuerySchema = paginationQuerySchema
+	.extend({
+		status: adminInviteStatusSchema
+			.optional()
+			.describe("Only invites currently in this state"),
+		sort: z
+			.enum(ADMIN_INVITE_SORT)
+			.optional()
+			.describe("Column to sort the page by — defaults to `created_at`"),
+	})
+	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE);
+
+/**
  * One invite on the wire. The `token` is never returned — it only ever travels
- * in the emailed link. Timestamps are ISO 8601 strings.
+ * in the emailed link. `status` is derived server-side from `accepted_at` /
+ * `expires_at` (`ADMIN_INVITE_STATUS`), not a column. Timestamps are ISO 8601
+ * strings.
  */
 export const adminInviteSchema = z.object({
 	id: uuidSchema,
 	email: stringSchema.describe("Who the invite was sent to"),
+	status: adminInviteStatusSchema,
 	accepted_at: stringSchema
 		.nullable()
 		.describe("When the invite was accepted (ISO 8601), or null"),
@@ -47,3 +82,10 @@ export const adminInviteSchema = z.object({
 export const adminInviteResponseSchema = globalResponseSchema.extend({
 	data: adminInviteSchema,
 });
+
+/** Response for `GET /v1/admin/invites` — one page of the calling admin's invites. */
+export const adminInviteListResponseSchema = paginatedGlobalResponseSchema.extend(
+	{
+		data: z.array(adminInviteSchema),
+	},
+);

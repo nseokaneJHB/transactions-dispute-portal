@@ -22,8 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { TextField } from "@/components/custom/text-field";
 import { useFormField } from "@/hooks/use-form-field";
-import { useToastMutation } from "@/hooks/use-toast-mutation";
-import type { ApiError } from "@/api";
+import { runToastMutation } from "@/lib/toast-mutation";
+import { applyServerErrors } from "@/lib/form";
 
 const searchSchema = z.object({ token: z.string().optional() });
 
@@ -44,16 +44,11 @@ const AcceptInvitePage = () => {
 
 	const onSubmit = (values: AdminInviteAcceptBody) => {
 		if (!token) return;
-		useToastMutation({
+		runToastMutation({
 			loading: "Setting up your admin account…",
 			promise: mutateAsync({ ...values, token }),
 			onSuccess: () => router.navigate({ to: "/sign-in" }),
-			onError: (error: ApiError) =>
-				error.errors?.forEach((issue) =>
-					setError(issue.field as keyof AdminInviteAcceptBody, {
-						message: issue.message,
-					}),
-				),
+			onError: (error) => applyServerErrors(setError, error),
 		});
 	};
 

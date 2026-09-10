@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { DISPUTE_STATUS } from "@transaction-dispute-portal/shared";
 
-import { disputeStatusTone, formatZar, humanize } from "@/lib/format";
+import { formatZar, humanize } from "@/lib/format";
 
 const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
 
@@ -19,13 +19,5 @@ describe("formatZar", () => {
 describe("humanize", () => {
 	it("title-cases a SCREAMING_SNAKE enum value", () => {
 		expect(humanize(DISPUTE_STATUS.UNDER_REVIEW)).toBe("Under Review");
-	});
-});
-
-describe("disputeStatusTone", () => {
-	it("has a colour token for every dispute status", () => {
-		for (const status of Object.values(DISPUTE_STATUS)) {
-			expect(disputeStatusTone[status]).toMatch(/^text-/);
-		}
 	});
 });

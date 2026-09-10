@@ -31,7 +31,3 @@ export const CardDescription = ({
 export const CardContent = ({ className, ...props }: ComponentProps<"div">) => (
 	<div className={cn("flex flex-col gap-3", className)} {...props} />
 );
-
-export const CardFooter = ({ className, ...props }: ComponentProps<"div">) => (
-	<div className={cn("flex items-center gap-2", className)} {...props} />
-);

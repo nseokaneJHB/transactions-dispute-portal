@@ -8,7 +8,7 @@ import { withdrawDispute } from "@/api/dispute";
 import { QUERY_KEYS } from "@/api/constant";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useToastMutation } from "@/hooks/use-toast-mutation";
+import { runToastMutation } from "@/lib/toast-mutation";
 import { refreshQuery } from "@/lib/query";
 
 export const WithdrawButton = ({ disputeId }: { disputeId: string }) => {
@@ -21,7 +21,7 @@ export const WithdrawButton = ({ disputeId }: { disputeId: string }) => {
 	});
 
 	const withdraw = () =>
-		useToastMutation({
+		runToastMutation({
 			loading: "Withdrawing your dispute…",
 			promise: mutateAsync(),
 			onSuccess: async () => {

@@ -44,7 +44,7 @@ const envSchema = z.object({
 	SMTP_FROM: z.string().default("noreply@transaction-dispute-portal.local"),
 });
 
-export type Env = z.infer<typeof envSchema>;
+type Env = z.infer<typeof envSchema>;
 
 let _env: Env | null = null;
 

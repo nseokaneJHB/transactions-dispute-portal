@@ -10,7 +10,7 @@ const TEST_USER_AGENT = "vitest-suite";
 let ipSeed = 0;
 
 /** A fresh caller IP per sign-in so per-route rate limits don't bleed across tests. */
-export const nextIp = (): string => {
+const nextIp = (): string => {
 	ipSeed += 1;
 	return `10.20.${Math.floor(ipSeed / 250) % 250}.${(ipSeed % 250) + 1}`;
 };

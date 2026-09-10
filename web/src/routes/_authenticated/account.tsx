@@ -22,9 +22,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { TextField } from "@/components/custom/text-field";
 import { PageHeader } from "@/components/custom/page-header";
 import { useFormField } from "@/hooks/use-form-field";
-import { useToastMutation } from "@/hooks/use-toast-mutation";
+import { runToastMutation } from "@/lib/toast-mutation";
+import { applyServerErrors } from "@/lib/form";
 import { formatDate } from "@/lib/format";
-import type { ApiError } from "@/api";
 
 const AccountPage = () => {
 	const { user } = Route.useRouteContext();
@@ -42,16 +42,11 @@ const AccountPage = () => {
 	});
 
 	const onSubmit = (values: AuthChangeEmailBody) =>
-		useToastMutation({
+		runToastMutation({
 			loading: "Sending the approval link…",
 			promise: mutateAsync(values),
 			onSuccess: () => reset(),
-			onError: (error: ApiError) =>
-				error.errors?.forEach((issue) =>
-					setError(issue.field as keyof AuthChangeEmailBody, {
-						message: issue.message,
-					}),
-				),
+			onError: (error) => applyServerErrors(setError, error),
 		});
 
 	return (

@@ -1,10 +1,14 @@
 import { z } from "zod";
 
 import {
+	ADMIN_INVITE_STATUS,
 	ADMIN_RESOLUTION_STATUS,
+	DEFAULT_PAGE_LIMIT,
+	DEFAULT_PAGE_NUMBER,
 	DISPUTE_REASON,
 	DISPUTE_STATUS,
 	HTTP_CODE,
+	MAX_PAGE_LIMIT,
 	ORDER_DIRECTION,
 	SERVER_STATUS,
 	USER_ROLE,
@@ -52,6 +56,47 @@ export const orderDirectionSchema = z
 	.enum(ORDER_DIRECTION)
 	.describe("Order direction for sorting");
 
+/** `page` / `limit` as they arrive on a list query — coerced from their string query form, defaulted, bounded. */
+export const pageQuerySchema = z.coerce
+	.number()
+	.int()
+	.positive()
+	.default(DEFAULT_PAGE_NUMBER)
+	.describe("1-based page number");
+
+export const limitQuerySchema = z.coerce
+	.number()
+	.int()
+	.positive()
+	.max(MAX_PAGE_LIMIT)
+	.default(DEFAULT_PAGE_LIMIT)
+	.describe("Items per page");
+
+/**
+ * `?search=` on a list query — a free-text term matched case-insensitively as a
+ * substring of the list's text columns. Trimmed; an empty or whitespace-only
+ * term is treated as absent.
+ */
+export const searchQuerySchema = z
+	.string()
+	.trim()
+	.max(100, "Keep the search term under 100 characters")
+	.optional()
+	.transform((value) => value || undefined)
+	.describe("Case-insensitive substring match across the list's text columns");
+
+/** `?from=` on a list query — the inclusive start of a date range (`YYYY-MM-DD`). */
+export const fromDateQuerySchema = z.iso
+	.date()
+	.optional()
+	.describe("Earliest date in range, inclusive (YYYY-MM-DD)");
+
+/** `?to=` on a list query — the inclusive end of a date range (`YYYY-MM-DD`). */
+export const toDateQuerySchema = z.iso
+	.date()
+	.optional()
+	.describe("Latest date in range, inclusive (YYYY-MM-DD)");
+
 export const httpCodeSchema = z
 	.enum(HTTP_CODE)
 	.describe("Standardized response code");
@@ -73,6 +118,10 @@ export const disputeReasonSchema = z
 export const disputeResolutionSchema = z
 	.enum(ADMIN_RESOLUTION_STATUS)
 	.describe("The reviewer's decision — the terminal status to move the dispute to");
+
+export const adminInviteStatusSchema = z
+	.enum(ADMIN_INVITE_STATUS)
+	.describe("Derived state of an admin invite");
 
 /**
  * Path-param schema for any route whose sole parameter is a single UUID —

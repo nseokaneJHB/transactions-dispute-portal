@@ -15,7 +15,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminInviteRouteImport } from './routes/admin/invite'
 import { Route as AccountEmailChangeRouteImport } from './routes/account/email-change'
 import { Route as UnauthenticatedSignInRouteImport } from './routes/_unauthenticated/sign-in'
-import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedTransactionsIndexRouteImport } from './routes/_authenticated/transactions/index'
 import { Route as AuthenticatedDisputesIndexRouteImport } from './routes/_authenticated/disputes/index'
@@ -52,11 +51,6 @@ const UnauthenticatedSignInRoute = UnauthenticatedSignInRouteImport.update({
   path: '/sign-in',
   getParentRoute: () => UnauthenticatedRoute,
 } as any)
-const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -75,9 +69,9 @@ const AuthenticatedDisputesIndexRoute =
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedAdminRoute,
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedTransactionsTransactionIdRoute =
   AuthenticatedTransactionsTransactionIdRouteImport.update({
@@ -93,15 +87,14 @@ const AuthenticatedDisputesDisputeIdRoute =
   } as any)
 const AuthenticatedAdminInvitesRoute =
   AuthenticatedAdminInvitesRouteImport.update({
-    id: '/invites',
-    path: '/invites',
-    getParentRoute: () => AuthenticatedAdminRoute,
+    id: '/admin/invites',
+    path: '/admin/invites',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AuthenticatedAccountRoute
-  '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/sign-in': typeof UnauthenticatedSignInRoute
   '/account/email-change': typeof AccountEmailChangeRoute
   '/admin/invite': typeof AdminInviteRoute
@@ -131,7 +124,6 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/_unauthenticated': typeof UnauthenticatedRouteWithChildren
   '/_authenticated/account': typeof AuthenticatedAccountRoute
-  '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_unauthenticated/sign-in': typeof UnauthenticatedSignInRoute
   '/account/email-change': typeof AccountEmailChangeRoute
   '/admin/invite': typeof AdminInviteRoute
@@ -147,7 +139,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/account'
-    | '/admin'
     | '/sign-in'
     | '/account/email-change'
     | '/admin/invite'
@@ -176,7 +167,6 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/_unauthenticated'
     | '/_authenticated/account'
-    | '/_authenticated/admin'
     | '/_unauthenticated/sign-in'
     | '/account/email-change'
     | '/admin/invite'
@@ -240,13 +230,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnauthenticatedSignInRouteImport
       parentRoute: typeof UnauthenticatedRoute
     }
-    '/_authenticated/admin': {
-      id: '/_authenticated/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthenticatedAdminRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/account': {
       id: '/_authenticated/account'
       path: '/account'
@@ -270,10 +253,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/admin/': {
       id: '/_authenticated/admin/'
-      path: '/'
+      path: '/admin'
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
-      parentRoute: typeof AuthenticatedAdminRoute
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/transactions/$transactionId': {
       id: '/_authenticated/transactions/$transactionId'
@@ -291,42 +274,31 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/admin/invites': {
       id: '/_authenticated/admin/invites'
-      path: '/invites'
+      path: '/admin/invites'
       fullPath: '/admin/invites'
       preLoaderRoute: typeof AuthenticatedAdminInvitesRouteImport
-      parentRoute: typeof AuthenticatedAdminRoute
+      parentRoute: typeof AuthenticatedRoute
     }
   }
 }
 
-interface AuthenticatedAdminRouteChildren {
-  AuthenticatedAdminInvitesRoute: typeof AuthenticatedAdminInvitesRoute
-  AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
-}
-
-const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
-  AuthenticatedAdminInvitesRoute: AuthenticatedAdminInvitesRoute,
-  AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
-}
-
-const AuthenticatedAdminRouteWithChildren =
-  AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren)
-
 interface AuthenticatedRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
-  AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
+  AuthenticatedAdminInvitesRoute: typeof AuthenticatedAdminInvitesRoute
   AuthenticatedDisputesDisputeIdRoute: typeof AuthenticatedDisputesDisputeIdRoute
   AuthenticatedTransactionsTransactionIdRoute: typeof AuthenticatedTransactionsTransactionIdRoute
+  AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedDisputesIndexRoute: typeof AuthenticatedDisputesIndexRoute
   AuthenticatedTransactionsIndexRoute: typeof AuthenticatedTransactionsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
-  AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
+  AuthenticatedAdminInvitesRoute: AuthenticatedAdminInvitesRoute,
   AuthenticatedDisputesDisputeIdRoute: AuthenticatedDisputesDisputeIdRoute,
   AuthenticatedTransactionsTransactionIdRoute:
     AuthenticatedTransactionsTransactionIdRoute,
+  AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
   AuthenticatedDisputesIndexRoute: AuthenticatedDisputesIndexRoute,
   AuthenticatedTransactionsIndexRoute: AuthenticatedTransactionsIndexRoute,
 }

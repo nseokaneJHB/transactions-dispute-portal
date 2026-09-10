@@ -42,6 +42,75 @@ describe("admin invites", () => {
 		expect(response.statusCode).toBe(403);
 	});
 
+	it("lists the calling admin's invites as a page, with a derived status", async () => {
+		await invite(app, admin, "listed-invitee@test.local");
+
+		const response = await app.inject({
+			method: "GET",
+			url: "/v1/admin/invites",
+			headers: { cookie: admin.cookie },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body).toMatchObject({ page: 1, limit: 10 });
+		expect(typeof body.count).toBe("number");
+
+		const invites = body.data as Array<{
+			email: string;
+			status: string;
+			token?: string;
+		}>;
+		const mine = invites.find(
+			(row) => row.email === "listed-invitee@test.local",
+		);
+		expect(mine?.status).toBe("PENDING");
+		expect(mine).not.toHaveProperty("token");
+	});
+
+	it("filters the invite list by derived status", async () => {
+		const pending = await app.inject({
+			method: "GET",
+			url: "/v1/admin/invites?status=PENDING",
+			headers: { cookie: admin.cookie },
+		});
+		expect(pending.statusCode).toBe(200);
+		expect(
+			(pending.json().data as Array<{ status: string }>).every(
+				(row) => row.status === "PENDING",
+			),
+		).toBe(true);
+
+		const accepted = await app.inject({
+			method: "GET",
+			url: "/v1/admin/invites?status=ACCEPTED",
+			headers: { cookie: admin.cookie },
+		});
+		expect(accepted.statusCode).toBe(200);
+		expect(
+			(accepted.json().data as Array<{ email: string }>).some(
+				(row) => row.email === "listed-invitee@test.local",
+			),
+		).toBe(false);
+
+		const bad = await app.inject({
+			method: "GET",
+			url: "/v1/admin/invites?status=NONSENSE",
+			headers: { cookie: admin.cookie },
+		});
+		expect(bad.statusCode).toBe(422);
+	});
+
+	it("403s a non-admin listing invites", async () => {
+		const alice = await signIn(app, data.alice.email);
+		const response = await app.inject({
+			method: "GET",
+			url: "/v1/admin/invites",
+			headers: { cookie: alice.cookie },
+		});
+		expect(response.statusCode).toBe(403);
+	});
+
 	it("409s inviting an address that already has an account", async () => {
 		const response = await invite(app, admin, data.alice.email);
 		expect(response.statusCode).toBe(409);

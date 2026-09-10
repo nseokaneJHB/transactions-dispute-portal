@@ -8,6 +8,7 @@ import {
 	ScaleIcon,
 	UserCogIcon,
 	ShieldCheckIcon,
+	MailPlusIcon,
 } from "lucide-react";
 
 import {
@@ -25,24 +26,38 @@ const customerLinks = [
 		to: FRONTEND_URLS.TRANSACTIONS,
 		label: "Transactions",
 		icon: ReceiptTextIcon,
+		exact: false,
 	},
-	{ to: FRONTEND_URLS.DISPUTES, label: "Disputes", icon: ScaleIcon },
-	{ to: "/account", label: "Account", icon: UserCogIcon },
+	{
+		to: FRONTEND_URLS.DISPUTES,
+		label: "Disputes",
+		icon: ScaleIcon,
+		exact: false,
+	},
+	{ to: "/account", label: "Account", icon: UserCogIcon, exact: false },
 ] as const;
 
-const adminLink = {
-	to: FRONTEND_URLS.ADMIN,
-	label: "Review queue",
-	icon: ShieldCheckIcon,
-} as const;
+const adminLinks = [
+	{
+		to: FRONTEND_URLS.ADMIN,
+		label: "Review queue",
+		icon: ShieldCheckIcon,
+		exact: true,
+	},
+	{
+		to: "/admin/invites",
+		label: "Invitations",
+		icon: MailPlusIcon,
+		exact: false,
+	},
+	{ to: "/account", label: "Account", icon: UserCogIcon, exact: false },
+] as const;
 
 export const Navigation = ({ user }: { user: AuthSession }) => {
 	const [open, setOpen] = useState(false);
 
 	const links =
-		user.role === USER_ROLE.ADMIN
-			? [adminLink, { to: "/account", label: "Account", icon: UserCogIcon }]
-			: customerLinks;
+		user.role === USER_ROLE.ADMIN ? adminLinks : customerLinks;
 
 	return (
 		<header className="border-b">
@@ -53,13 +68,13 @@ export const Navigation = ({ user }: { user: AuthSession }) => {
 				</Link>
 
 				<nav className="hidden items-center gap-1 md:flex">
-					{links.map(({ to, label, icon: Icon }) => (
+					{links.map(({ to, label, icon: Icon, exact }) => (
 						<Link
 							key={to}
 							to={to}
 							className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors"
 							activeProps={{ className: "bg-muted text-foreground" }}
-							activeOptions={{ exact: to === "/" }}
+							activeOptions={{ exact, includeSearch: false }}
 						>
 							<Icon className="size-4" />
 							{label}
@@ -92,14 +107,14 @@ export const Navigation = ({ user }: { user: AuthSession }) => {
 					open ? "flex" : "hidden",
 				)}
 			>
-				{links.map(({ to, label, icon: Icon }) => (
+				{links.map(({ to, label, icon: Icon, exact }) => (
 					<Link
 						key={to}
 						to={to}
 						onClick={() => setOpen(false)}
 						className="text-muted-foreground hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium"
 						activeProps={{ className: "bg-muted text-foreground" }}
-						activeOptions={{ exact: to === "/" }}
+						activeOptions={{ exact, includeSearch: false }}
 					>
 						<Icon className="size-4" />
 						{label}

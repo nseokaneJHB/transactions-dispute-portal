@@ -1,12 +1,31 @@
-import { and, asc, desc, eq, getTableColumns, gte, lte } from "drizzle-orm";
+import { and, desc, eq, getTableColumns } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
-import { ORDER_DIRECTION } from "@transaction-dispute-portal/shared";
-import type { OrderDirection } from "@transaction-dispute-portal/shared";
+import { TRANSACTION_SORT } from "@transaction-dispute-portal/shared";
+import type { TransactionSort, TransactionsQuery } from "@transaction-dispute-portal/shared";
 
 import { TransactionModel } from "../schema/index.js";
 import type { TransactionModelSelect } from "../schema/index.js";
 
 import type { Executor } from "../executor.js";
+import {
+	containsText,
+	sortDirection,
+	withinDays,
+	type Page,
+} from "./list-filters.js";
+
+/**
+ * Binds each value the shared `TRANSACTION_SORT` whitelist allows to its Drizzle
+ * column — the one piece that can't live in `shared`, since it references the
+ * table. The `Record` type makes the map track the whitelist: adding a sort key
+ * without a column here is a type error. `transacted_at` is the default.
+ */
+const SORT_COLUMN: Record<TransactionSort, PgColumn> = {
+	[TRANSACTION_SORT.transacted_at]: TransactionModel.transacted_at,
+	[TRANSACTION_SORT.merchant]: TransactionModel.merchant_name,
+	[TRANSACTION_SORT.amount_cents]: TransactionModel.amount_cents,
+};
 
 /**
  * The customer path never selects `user_id` (always the caller) — excluded
@@ -16,42 +35,36 @@ const { user_id, ...CUSTOMER_COLUMNS } = getTableColumns(TransactionModel);
 
 export type TransactionRow = Omit<TransactionModelSelect, "user_id">;
 
-interface FindManyOptions {
-	userId: string;
-	from?: Date;
-	to?: Date;
-	page: number;
-	limit: number;
-	order: OrderDirection;
-}
+/** The validated list query, scoped to the caller. */
+type FindManyOptions = TransactionsQuery & { userId: string };
 
-interface Page<T> {
-	rows: T[];
-	total: number;
-}
-
-/** One page of a user's transactions, newest (or oldest) `transacted_at` first, plus the full match count. */
+/**
+ * One page of a user's transactions plus the full match count. `search` matches
+ * the merchant name; `from` / `to` bound `transacted_at`; `sort` / `order` pick
+ * the column and direction (`transacted_at` descending by default).
+ */
 export const findTransactionsByUser = async (
 	executor: Executor,
 	options: FindManyOptions,
 ): Promise<Page<TransactionRow>> => {
 	const where = and(
 		eq(TransactionModel.user_id, options.userId),
-		options.from ? gte(TransactionModel.transacted_at, options.from) : undefined,
-		options.to ? lte(TransactionModel.transacted_at, options.to) : undefined,
+		options.search
+			? containsText(options.search, TransactionModel.merchant_name)
+			: undefined,
+		withinDays(TransactionModel.transacted_at, options.from, options.to),
 	);
 
-	const direction = options.order === ORDER_DIRECTION.asc ? asc : desc;
+	const direction = sortDirection(options.order);
+	const sortColumn =
+		SORT_COLUMN[options.sort ?? TRANSACTION_SORT.transacted_at];
 
 	const [rows, total] = await Promise.all([
 		executor
 			.select(CUSTOMER_COLUMNS)
 			.from(TransactionModel)
 			.where(where)
-			.orderBy(
-				direction(TransactionModel.transacted_at),
-				desc(TransactionModel.id),
-			)
+			.orderBy(direction(sortColumn), desc(TransactionModel.id))
 			.limit(options.limit)
 			.offset((options.page - 1) * options.limit),
 		executor.$count(TransactionModel, where),

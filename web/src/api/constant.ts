@@ -6,4 +6,6 @@ export const QUERY_KEYS = {
 	DISPUTES: ["disputes"],
 	DISPUTE: ["dispute"],
 	ADMIN_DISPUTES: ["admin", "disputes"],
+	ADMIN_DISPUTE_SUMMARY: ["admin", "disputes", "summary"],
+	ADMIN_INVITES: ["admin", "invites"],
 } as const;

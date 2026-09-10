@@ -16,10 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { SelectField, TextAreaField } from "@/components/custom/text-field";
 import { useFormField } from "@/hooks/use-form-field";
-import { useToastMutation } from "@/hooks/use-toast-mutation";
+import { runToastMutation } from "@/lib/toast-mutation";
+import { applyServerErrors } from "@/lib/form";
 import { humanize } from "@/lib/format";
 import { refreshQuery } from "@/lib/query";
-import type { ApiError } from "@/api";
 
 export const DisputeForm = ({ transactionId }: { transactionId: string }) => {
 	const router = useRouter();
@@ -35,13 +35,13 @@ export const DisputeForm = ({ transactionId }: { transactionId: string }) => {
 		},
 	});
 
-	const reason = useFormField({ name: "reason", control, type: "select" });
+	const reason = useFormField({ name: "reason", control });
 	const description = useFormField({ name: "description", control });
 
 	const { mutateAsync, isPending } = useMutation({ mutationFn: submitDispute });
 
 	const onSubmit = (values: DisputeCreateBody) =>
-		useToastMutation({
+		runToastMutation({
 			loading: "Opening your dispute…",
 			promise: mutateAsync(values),
 			onSuccess: async (response) => {
@@ -51,12 +51,7 @@ export const DisputeForm = ({ transactionId }: { transactionId: string }) => {
 					params: { disputeId: response.data.id },
 				});
 			},
-			onError: (error: ApiError) =>
-				error.errors?.forEach((issue) =>
-					setError(issue.field as keyof DisputeCreateBody, {
-						message: issue.message,
-					}),
-				),
+			onError: (error) => applyServerErrors(setError, error),
 		});
 
 	return (
@@ -65,7 +60,7 @@ export const DisputeForm = ({ transactionId }: { transactionId: string }) => {
 				id="reason"
 				label="Reason"
 				value={reason.value}
-				onChange={(event) => reason.onChange(event.target.value)}
+				onChange={reason.onChange}
 				error={reason.error}
 			>
 				{Object.values(DISPUTE_REASON).map((value) => (

@@ -7,6 +7,7 @@ import {
 import type { AdminDispute } from "@transaction-dispute-portal/shared";
 
 import {
+	countDisputesByStatus,
 	findDisputeById,
 	findDisputesForReview,
 	markDisputeUnderReview,
@@ -16,8 +17,10 @@ import {
 import type { AdminDisputeRow } from "../../database/repository/dispute.js";
 
 import { publishDisputeUpdate } from "../../lib/notifier.js";
+import { paginatedResponse } from "../../lib/paginated-response.js";
 
 import type {
+	GetDisputeSummaryRequest,
 	ListDisputesForReviewRequest,
 	ResolveDisputeRequest,
 	StartDisputeReviewRequest,
@@ -31,6 +34,10 @@ const toWire = (row: AdminDisputeRow): AdminDispute => ({
 		merchant_name: row.transaction.merchant_name,
 		amount_cents: row.transaction.amount_cents,
 		transacted_at: row.transaction.transacted_at.toISOString(),
+	},
+	customer: {
+		name: row.customer.name,
+		email: row.customer.email,
 	},
 	status: row.status,
 	reason: row.reason,
@@ -46,22 +53,33 @@ export const listDisputesForReview = async (
 	request: FastifyRequest<ListDisputesForReviewRequest>,
 	reply: FastifyReply<ListDisputesForReviewRequest>,
 ): Promise<void> => {
-	const { status: statusFilter, order, page, limit } = request.query;
-
 	const { rows, total } = await findDisputesForReview(
 		request.server.connection,
-		{ status: statusFilter, order, page, limit },
+		request.query,
 	);
+
+	return reply.status(HTTP_RESPONSE_CODE.OK.status).send(
+		paginatedResponse({
+			query: request.query,
+			total,
+			rows: rows.map(toWire),
+			message: "Disputes retrieved.",
+		}),
+	);
+};
+
+/** `GET /v1/admin/disputes/summary` — how many disputes sit in each status right now, for the queue's stat cards. */
+export const getDisputeSummary = async (
+	request: FastifyRequest<GetDisputeSummaryRequest>,
+	reply: FastifyReply<GetDisputeSummaryRequest>,
+): Promise<void> => {
+	const counts = await countDisputesByStatus(request.server.connection);
 
 	const { status, code } = HTTP_RESPONSE_CODE.OK;
 	return reply.status(status).send({
 		code,
-		page,
-		limit,
-		count: total,
-		total: rows.length,
-		message: "Disputes retrieved.",
-		data: rows.map(toWire),
+		message: "Dispute summary retrieved.",
+		data: counts,
 	});
 };
 
@@ -110,7 +128,11 @@ export const startDisputeReview = async (
 			note: "Moved to review by the reviewer.",
 		});
 
-		return { ...row, transaction: dispute.transaction };
+		return {
+			...row,
+			transaction: dispute.transaction,
+			customer: dispute.customer,
+		};
 	});
 
 	if (!reviewed) {
@@ -180,7 +202,11 @@ export const resolveDisputeForReview = async (
 			note,
 		});
 
-		return { ...row, transaction: dispute.transaction };
+		return {
+			...row,
+			transaction: dispute.transaction,
+			customer: dispute.customer,
+		};
 	});
 
 	if (!resolved) {

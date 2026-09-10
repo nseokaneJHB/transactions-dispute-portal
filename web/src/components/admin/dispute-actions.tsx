@@ -30,7 +30,7 @@ import {
 import { StatusBadge } from "@/components/custom/status-badge";
 import { SelectField, TextAreaField } from "@/components/custom/text-field";
 import { useFormField } from "@/hooks/use-form-field";
-import { useToastMutation } from "@/hooks/use-toast-mutation";
+import { runToastMutation } from "@/lib/toast-mutation";
 import { formatDate, formatZar, humanize } from "@/lib/format";
 import { refreshQuery } from "@/lib/query";
 
@@ -50,11 +50,7 @@ const ResolveForm = ({
 		defaultValues: { resolution: ADMIN_RESOLUTION_STATUS[0], note: "" },
 	});
 
-	const resolution = useFormField({
-		name: "resolution",
-		control,
-		type: "select",
-	});
+	const resolution = useFormField({ name: "resolution", control });
 	const note = useFormField({ name: "note", control });
 
 	const { mutateAsync, isPending } = useMutation({
@@ -62,7 +58,7 @@ const ResolveForm = ({
 	});
 
 	const onSubmit = (values: DisputeResolveBody) =>
-		useToastMutation({
+		runToastMutation({
 			loading: "Recording your decision…",
 			promise: mutateAsync({ ...values, disputeId }),
 			onSuccess: async () => {
@@ -77,7 +73,7 @@ const ResolveForm = ({
 				id={`resolution-${disputeId}`}
 				label="Decision"
 				value={resolution.value}
-				onChange={(event) => resolution.onChange(event.target.value)}
+				onChange={resolution.onChange}
 				error={resolution.error}
 			>
 				{ADMIN_RESOLUTION_STATUS.map((value) => (
@@ -124,7 +120,7 @@ const DisputeReviewDialog = ({
 	});
 
 	const startReview = () =>
-		useToastMutation({
+		runToastMutation({
 			loading: "Moving to review…",
 			promise: mutateAsync(),
 			onSuccess: async () => {
@@ -134,24 +130,40 @@ const DisputeReviewDialog = ({
 		});
 
 	return (
-		<DialogContent>
+		<DialogContent className="space-y-4">
 			<DialogHeader>
 				<DialogTitle className="flex items-center gap-2">
 					{humanize(dispute.reason)}
 					<StatusBadge status={dispute.status} />
 				</DialogTitle>
 				<DialogDescription>
-					{dispute.transaction.merchant_name} —{" "}
-					{formatZar(dispute.transaction.amount_cents)} on{" "}
-					{formatDate(dispute.transaction.transacted_at)}
+					Opened {formatDate(dispute.created_at)}
 				</DialogDescription>
 			</DialogHeader>
 
-			<div className="flex flex-col gap-3">
-				<p className="text-muted-foreground text-xs">
-					Customer {dispute.user_id}
-				</p>
+			<div className="flex flex-col gap-4">
 				<p className="text-sm whitespace-pre-wrap">{dispute.description}</p>
+
+				<dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+					<dt className="text-muted-foreground">Customer</dt>
+					<dd className="text-right">
+						<span className="font-medium">{dispute.customer.name}</span>
+						<span className="text-muted-foreground block text-xs">
+							{dispute.customer.email}
+						</span>
+					</dd>
+
+					<dt className="text-muted-foreground">Transaction</dt>
+					<dd className="text-right">
+						<span className="font-medium">
+							{dispute.transaction.merchant_name}
+						</span>
+						<span className="text-muted-foreground block text-xs">
+							{formatZar(dispute.transaction.amount_cents)} on{" "}
+							{formatDate(dispute.transaction.transacted_at)}
+						</span>
+					</dd>
+				</dl>
 
 				{dispute.resolution_note && (
 					<p className="bg-muted rounded-md p-3 text-sm">
@@ -191,7 +203,11 @@ export const DisputeActions = ({ dispute }: { dispute: AdminDispute }) => {
 	return (
 		<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
 			<DialogTrigger asChild>
-				<Button variant={open ? "primary" : "ghost"} size="sm">
+				<Button
+					variant={open ? "primary" : "secondary"}
+					size="sm"
+					className="w-24"
+				>
 					{open ? <SearchCheckIcon /> : <EyeIcon />}
 					{open ? "Review" : "View"}
 				</Button>

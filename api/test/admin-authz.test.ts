@@ -45,6 +45,16 @@ describe("admin route authorization", () => {
 		expect(response.statusCode).toBe(403);
 	});
 
+	it("403s a customer session on the dispute summary", async () => {
+		const response = await app.inject({
+			method: "GET",
+			url: "/v1/admin/disputes/summary",
+			headers: { cookie: alice.cookie },
+		});
+
+		expect(response.statusCode).toBe(403);
+	});
+
 	it("403s a customer session on resolve — it is not reachable without the admin role", async () => {
 		const response = await app.inject({
 			method: "POST",
@@ -79,6 +89,29 @@ describe("admin route authorization", () => {
 		expect(response.statusCode).toBe(200);
 		expect(response.json().data.status).toBe("RESOLVED");
 		expect(response.json().data.user_id).toBe(data.alice.id);
+		expect(response.json().data.customer).toEqual({
+			name: "Alice Test",
+			email: data.alice.email,
+		});
+	});
+
+	it("carries the owning customer's name and email on the review queue", async () => {
+		const response = await app.inject({
+			method: "GET",
+			url: "/v1/admin/disputes",
+			headers: { cookie: admin.cookie },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const mine = response
+			.json()
+			.data.find(
+				(dispute: { id: string }) => dispute.id === data.aliceOpenDisputeId,
+			);
+		expect(mine.customer).toEqual({
+			name: "Alice Test",
+			email: data.alice.email,
+		});
 	});
 
 	it("401s the review queue without any session", async () => {

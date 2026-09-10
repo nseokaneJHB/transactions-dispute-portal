@@ -1,21 +1,59 @@
-import { and, asc, desc, eq, getTableColumns, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, getTableColumns, inArray } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
 import {
+	ADMIN_DISPUTE_SORT,
+	DISPUTE_SORT,
 	DISPUTE_STATUS,
 	OPEN_DISPUTE_STATUS,
-	ORDER_DIRECTION,
 } from "@transaction-dispute-portal/shared";
 import type {
+	AdminDisputeSort,
+	AdminDisputesQuery,
 	DisputeReason,
 	DisputeResolution,
+	DisputeSort,
+	DisputesQuery,
 	DisputeStatus,
-	OrderDirection,
+	DisputeStatusCounts,
 } from "@transaction-dispute-portal/shared";
 
-import { DisputeModel, TransactionModel } from "../schema/index.js";
+import { DisputeModel, TransactionModel, UserModel } from "../schema/index.js";
 import type { DisputeModelSelect } from "../schema/index.js";
 
 import type { Executor } from "../executor.js";
+import {
+	containsText,
+	sortDirection,
+	withinDays,
+	type Page,
+} from "./list-filters.js";
+
+/**
+ * Binds each value the shared `DISPUTE_SORT` whitelist allows to its Drizzle
+ * column — `merchant` / `amount_cents` live on the joined transaction, which is
+ * why this can't be a plain `getTableColumns` lookup and can't live in
+ * `shared`. The `Record` type keeps it in step with the whitelist. `created_at`
+ * is the default.
+ */
+const SORT_COLUMN: Record<DisputeSort, PgColumn> = {
+	[DISPUTE_SORT.created_at]: DisputeModel.created_at,
+	[DISPUTE_SORT.merchant]: TransactionModel.merchant_name,
+	[DISPUTE_SORT.amount_cents]: TransactionModel.amount_cents,
+	[DISPUTE_SORT.status]: DisputeModel.status,
+};
+
+/** The review queue also joins the customer, so it can additionally sort by their name. */
+const REVIEW_SORT_COLUMN: Record<AdminDisputeSort, PgColumn> = {
+	...SORT_COLUMN,
+	[ADMIN_DISPUTE_SORT.customer]: UserModel.name,
+};
+
+const sortColumnFor = (sort: DisputesQuery["sort"]): PgColumn =>
+	SORT_COLUMN[sort ?? DISPUTE_SORT.created_at];
+
+const reviewSortColumnFor = (sort: AdminDisputesQuery["sort"]): PgColumn =>
+	REVIEW_SORT_COLUMN[sort ?? ADMIN_DISPUTE_SORT.created_at];
 
 /**
  * The customer path never selects `user_id` (always the caller) or
@@ -43,37 +81,43 @@ type TransactionSummary = {
 };
 
 /**
+ * The dispute owner's own columns, joined onto every admin dispute read so a
+ * reviewer can see whose money they are deciding on without a second lookup by
+ * `user_id`. `user_id` is `NOT NULL`, so this inner join never drops a row.
+ */
+const CUSTOMER_SUMMARY_COLUMNS = {
+	name: UserModel.name,
+	email: UserModel.email,
+};
+
+type CustomerSummary = {
+	name: string;
+	email: string;
+};
+
+/**
  * A dispute row as it comes back from an `UPDATE`/`INSERT ... RETURNING` —
  * no joined transaction, since those statements can't join. The service layer
  * already has the transaction in hand from a prior read in every such case,
  * so it's merged in there instead of re-queried.
  */
-export type DisputeMutationRow = Omit<
-	DisputeModelSelect,
-	"user_id" | "resolved_by"
->;
+type DisputeMutationRow = Omit<DisputeModelSelect, "user_id" | "resolved_by">;
 
 export type DisputeRow = DisputeMutationRow & { transaction: TransactionSummary };
 
 export type AdminDisputeRow = DisputeModelSelect & {
 	transaction: TransactionSummary;
+	customer: CustomerSummary;
 };
 
-interface FindManyOptions {
-	userId: string;
-	status?: DisputeStatus;
-	transactionId?: string;
-	page: number;
-	limit: number;
-	order: OrderDirection;
-}
+/**
+ * The validated `disputesQuerySchema` list query. The customer path
+ * (`FindManyOptions`) adds a `userId` scope; the admin review queue
+ * (`FindManyForReviewOptions`) is unscoped and ignores `transaction_id`.
+ */
+type FindManyOptions = DisputesQuery & { userId: string };
 
-interface FindManyForReviewOptions {
-	status?: DisputeStatus;
-	page: number;
-	limit: number;
-	order: OrderDirection;
-}
+type FindManyForReviewOptions = AdminDisputesQuery;
 
 interface ResolveDisputeInput {
 	id: string;
@@ -89,12 +133,12 @@ interface NewDispute {
 	description: string;
 }
 
-interface Page<T> {
-	rows: T[];
-	total: number;
-}
-
-/** One page of a user's disputes, newest (or oldest) `created_at` first, plus the full match count. */
+/**
+ * One page of a user's disputes plus the full match count. `search` matches the
+ * dispute description and the disputed merchant's name; `from` / `to` bound
+ * `created_at`; `sort` / `order` pick the column and direction (`created_at`
+ * descending by default).
+ */
 export const findDisputesByUser = async (
 	executor: Executor,
 	options: FindManyOptions,
@@ -102,29 +146,39 @@ export const findDisputesByUser = async (
 	const where = and(
 		eq(DisputeModel.user_id, options.userId),
 		options.status ? eq(DisputeModel.status, options.status) : undefined,
-		options.transactionId
-			? eq(DisputeModel.transaction_id, options.transactionId)
+		options.transaction_id
+			? eq(DisputeModel.transaction_id, options.transaction_id)
 			: undefined,
+		options.search
+			? containsText(
+					options.search,
+					DisputeModel.description,
+					TransactionModel.merchant_name,
+				)
+			: undefined,
+		withinDays(DisputeModel.created_at, options.from, options.to),
 	);
 
-	const direction = options.order === ORDER_DIRECTION.asc ? asc : desc;
+	const direction = sortDirection(options.order);
+	const onTransaction = eq(DisputeModel.transaction_id, TransactionModel.id);
 
-	const [rows, total] = await Promise.all([
+	const [rows, [tally]] = await Promise.all([
 		executor
 			.select({ ...CUSTOMER_COLUMNS, transaction: TRANSACTION_SUMMARY_COLUMNS })
 			.from(DisputeModel)
-			.innerJoin(
-				TransactionModel,
-				eq(DisputeModel.transaction_id, TransactionModel.id),
-			)
+			.innerJoin(TransactionModel, onTransaction)
 			.where(where)
-			.orderBy(direction(DisputeModel.created_at), desc(DisputeModel.id))
+			.orderBy(direction(sortColumnFor(options.sort)), desc(DisputeModel.id))
 			.limit(options.limit)
 			.offset((options.page - 1) * options.limit),
-		executor.$count(DisputeModel, where),
+		executor
+			.select({ value: count() })
+			.from(DisputeModel)
+			.innerJoin(TransactionModel, onTransaction)
+			.where(where),
 	]);
 
-	return { rows, total };
+	return { rows, total: tally?.value ?? 0 };
 };
 
 /**
@@ -158,36 +212,91 @@ export const findUserDisputeById = async (
 	return row;
 };
 
-/** One page of all disputes (any owner), for the admin review queue, plus the full match count. */
+/**
+ * One page of all disputes (any owner), for the admin review queue, plus the
+ * full match count. `search` also matches the owning customer's name and email,
+ * since a reviewer often looks a person up; everything else matches
+ * `findDisputesByUser`.
+ */
 export const findDisputesForReview = async (
 	executor: Executor,
 	options: FindManyForReviewOptions,
 ): Promise<Page<AdminDisputeRow>> => {
-	const where = options.status
-		? eq(DisputeModel.status, options.status)
-		: undefined;
+	const where = and(
+		options.status ? eq(DisputeModel.status, options.status) : undefined,
+		options.search
+			? containsText(
+					options.search,
+					DisputeModel.description,
+					TransactionModel.merchant_name,
+					UserModel.name,
+					UserModel.email,
+				)
+			: undefined,
+		withinDays(DisputeModel.created_at, options.from, options.to),
+	);
 
-	const direction = options.order === ORDER_DIRECTION.asc ? asc : desc;
+	const onTransaction = eq(DisputeModel.transaction_id, TransactionModel.id);
+	const onCustomer = eq(DisputeModel.user_id, UserModel.id);
 
-	const [rows, total] = await Promise.all([
+	/**
+	 * With no explicit `sort`, the queue is a work list: unresolved first
+	 * (`status` enum order puts `SUBMITTED` / `UNDER_REVIEW` ahead of the
+	 * terminal states), oldest of those at the top so nothing rots. An explicit
+	 * `sort` overrides that entirely.
+	 */
+	const orderBy = options.sort
+		? [
+				sortDirection(options.order)(reviewSortColumnFor(options.sort)),
+				desc(DisputeModel.id),
+			]
+		: [asc(DisputeModel.status), asc(DisputeModel.created_at), desc(DisputeModel.id)];
+
+	const [rows, [tally]] = await Promise.all([
 		executor
 			.select({
 				...getTableColumns(DisputeModel),
 				transaction: TRANSACTION_SUMMARY_COLUMNS,
+				customer: CUSTOMER_SUMMARY_COLUMNS,
 			})
 			.from(DisputeModel)
-			.innerJoin(
-				TransactionModel,
-				eq(DisputeModel.transaction_id, TransactionModel.id),
-			)
+			.innerJoin(TransactionModel, onTransaction)
+			.innerJoin(UserModel, onCustomer)
 			.where(where)
-			.orderBy(direction(DisputeModel.created_at), desc(DisputeModel.id))
+			.orderBy(...orderBy)
 			.limit(options.limit)
 			.offset((options.page - 1) * options.limit),
-		executor.$count(DisputeModel, where),
+		executor
+			.select({ value: count() })
+			.from(DisputeModel)
+			.innerJoin(TransactionModel, onTransaction)
+			.innerJoin(UserModel, onCustomer)
+			.where(where),
 	]);
 
-	return { rows, total };
+	return { rows, total: tally?.value ?? 0 };
+};
+
+/**
+ * How many disputes sit in each lifecycle status right now — unfiltered, for
+ * the review-queue stat cards. Zero-fills statuses with no rows so the caller
+ * always gets a full `Record`.
+ */
+export const countDisputesByStatus = async (
+	executor: Executor,
+): Promise<DisputeStatusCounts> => {
+	const rows = await executor
+		.select({ status: DisputeModel.status, total: count() })
+		.from(DisputeModel)
+		.groupBy(DisputeModel.status);
+
+	const counts = Object.fromEntries(
+		Object.values(DISPUTE_STATUS).map((status) => [status, 0]),
+	) as Record<DisputeStatus, number>;
+
+	for (const row of rows) counts[row.status] = row.total;
+
+	return counts;
 };
 
 /** A single dispute by id, unscoped — for the admin review path. `undefined` if it does not exist. */
@@ -199,12 +308,14 @@ export const findDisputeById = async (
 		.select({
 			...getTableColumns(DisputeModel),
 			transaction: TRANSACTION_SUMMARY_COLUMNS,
+			customer: CUSTOMER_SUMMARY_COLUMNS,
 		})
 		.from(DisputeModel)
 		.innerJoin(
 			TransactionModel,
 			eq(DisputeModel.transaction_id, TransactionModel.id),
 		)
+		.innerJoin(UserModel, eq(DisputeModel.user_id, UserModel.id))
 		.where(eq(DisputeModel.id, options.id))
 		.limit(1);
 

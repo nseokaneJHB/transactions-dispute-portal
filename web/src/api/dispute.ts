@@ -4,7 +4,7 @@ import {
 	API_URLS,
 	API_PATHS,
 	buildUrlWithParams,
-	type DisputeStatus,
+	type DisputesQuery,
 	type DisputeResponse,
 	type DisputeCreateBody,
 	type DisputeListResponse,
@@ -17,16 +17,8 @@ import { env } from "@/lib/env";
 
 const customerUrl = API_URLS(env.VITE_API_VERSION).CUSTOMER;
 
-export interface DisputesQueryInput {
-	status?: DisputeStatus;
-	transaction_id?: string;
-	order?: "asc" | "desc";
-	page?: number;
-	limit?: number;
-}
-
 export const disputesRequest = createServerFn({ method: "GET" })
-	.inputValidator((input: DisputesQueryInput) => input)
+	.inputValidator((input: Partial<DisputesQuery>) => input)
 	.handler(async ({ data: params }): Promise<DisputeListResponse> => {
 		const { data } = await api.get<DisputeListResponse>(
 			`${customerUrl}${API_PATHS.DISPUTES}`,

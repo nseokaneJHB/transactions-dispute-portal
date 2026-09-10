@@ -1,7 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { endOfDay, parseISO, startOfDay } from "date-fns";
-
 import { HTTP_RESPONSE_CODE } from "@transaction-dispute-portal/shared";
 import type { Transaction } from "@transaction-dispute-portal/shared";
 
@@ -10,6 +8,8 @@ import {
 	findUserTransactionById,
 } from "../../database/repository/index.js";
 import type { TransactionRow } from "../../database/repository/transaction.js";
+
+import { paginatedResponse } from "../../lib/paginated-response.js";
 
 import type {
 	GetTransactionRequest,
@@ -30,30 +30,19 @@ export const listTransactions = async (
 	request: FastifyRequest<ListTransactionsRequest>,
 	reply: FastifyReply<ListTransactionsRequest>,
 ): Promise<void> => {
-	const { from, to, order, page, limit } = request.query;
-
-	const { rows, total } = await findTransactionsByUser(
-		request.server.connection,
-		{
-			order,
-			page,
-			limit,
-			userId: request.user!.id,
-			from: from ? startOfDay(parseISO(from)) : undefined,
-			to: to ? endOfDay(parseISO(to)) : undefined,
-		},
-	);
-
-	const { status, code } = HTTP_RESPONSE_CODE.OK;
-	return reply.status(status).send({
-		code,
-		page,
-		limit,
-		count: total,
-		total: rows.length,
-		message: "Transactions retrieved.",
-		data: rows.map(toWire),
+	const { rows, total } = await findTransactionsByUser(request.server.connection, {
+		...request.query,
+		userId: request.user!.id,
 	});
+
+	return reply.status(HTTP_RESPONSE_CODE.OK.status).send(
+		paginatedResponse({
+			query: request.query,
+			total,
+			rows: rows.map(toWire),
+			message: "Transactions retrieved.",
+		}),
+	);
 };
 
 /** `GET /v1/transactions/:transactionId` — one transaction, scoped to the caller. */

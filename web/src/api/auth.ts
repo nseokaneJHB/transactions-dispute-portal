@@ -86,7 +86,7 @@ export const confirmEmailChange = async (
 	return data;
 };
 
-export type AcceptAdminInvitePayload = AdminInviteAcceptBody & {
+type AcceptAdminInvitePayload = AdminInviteAcceptBody & {
 	token: string;
 };
 

@@ -24,8 +24,8 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { TextField } from "@/components/custom/text-field";
 import { useFormField } from "@/hooks/use-form-field";
-import { useToastMutation } from "@/hooks/use-toast-mutation";
-import type { ApiError } from "@/api";
+import { runToastMutation } from "@/lib/toast-mutation";
+import { applyServerErrors } from "@/lib/form";
 
 const searchSchema = z.object({ email: z.string().optional() });
 
@@ -40,16 +40,11 @@ const RequestStep = ({ onSent }: { onSent: (email: string) => void }) => {
 	const { mutateAsync, isPending } = useMutation({ mutationFn: requestOtp });
 
 	const onSubmit = (values: AuthOtpRequestBody) =>
-		useToastMutation({
+		runToastMutation({
 			loading: "Sending your code…",
 			promise: mutateAsync(values),
 			onSuccess: () => onSent(values.email),
-			onError: (error: ApiError) =>
-				error.errors?.forEach((issue) =>
-					setError(issue.field as keyof AuthOtpRequestBody, {
-						message: issue.message,
-					}),
-				),
+			onError: (error) => applyServerErrors(setError, error),
 		});
 
 	return (
@@ -97,19 +92,14 @@ const VerifyStep = ({
 	const { mutateAsync, isPending } = useMutation({ mutationFn: verifyOtp });
 
 	const onSubmit = (values: AuthOtpVerifyBody) =>
-		useToastMutation({
+		runToastMutation({
 			loading: "Checking your code…",
 			promise: mutateAsync(values),
 			onSuccess: async () => {
 				await router.invalidate();
 				await router.navigate({ to: "/" });
 			},
-			onError: (error: ApiError) =>
-				error.errors?.forEach((issue) =>
-					setError(issue.field as keyof AuthOtpVerifyBody, {
-						message: issue.message,
-					}),
-				),
+			onError: (error) => applyServerErrors(setError, error),
 		});
 
 	return (

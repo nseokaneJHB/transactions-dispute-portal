@@ -15,7 +15,7 @@ interface ToastMutationPayload<T extends GlobalResponse> {
  * Drive a mutation promise through a sonner toast — spinner while pending, the
  * server's `message` on either outcome — and run the caller's follow-up.
  */
-export const useToastMutation = <T extends GlobalResponse>({
+export const runToastMutation = <T extends GlobalResponse>({
 	promise,
 	loading,
 	onSuccess,

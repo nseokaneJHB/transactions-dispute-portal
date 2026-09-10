@@ -3,15 +3,20 @@ import type { RouteGenericInterface } from "fastify";
 import type {
 	UuidParams,
 	GlobalResponse,
-	DisputesQuery,
+	AdminDisputesQuery,
 	DisputeResolveBody,
 	AdminDisputeResponse,
 	AdminDisputeListResponse,
+	AdminDisputeSummaryResponse,
 } from "@transaction-dispute-portal/shared";
 
 export interface ListDisputesForReviewRequest extends RouteGenericInterface {
-	Querystring: DisputesQuery;
+	Querystring: AdminDisputesQuery;
 	Reply: AdminDisputeListResponse | GlobalResponse;
+}
+
+export interface GetDisputeSummaryRequest extends RouteGenericInterface {
+	Reply: AdminDisputeSummaryResponse | GlobalResponse;
 }
 
 export interface StartDisputeReviewRequest extends RouteGenericInterface {

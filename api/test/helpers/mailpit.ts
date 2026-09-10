@@ -55,19 +55,6 @@ export const waitForEmail = async (options: WaitOptions): Promise<string> => {
 	throw new Error(`No email for ${options.to} within the timeout.`);
 };
 
-/** Count messages matching a subject fragment sent to an address. */
-export const countEmails = async (
-	to: string,
-	subjectIncludes: string,
-): Promise<number> => {
-	const messages = await listMessages();
-	return messages.filter(
-		(message) =>
-			message.Subject.includes(subjectIncludes) &&
-			message.To.some((recipient) => recipient.Address === to),
-	).length;
-};
-
 /** Pull the first 6-digit run out of an email body (the OTP). */
 export const extractOtp = (body: string): string => {
 	const match = body.match(/\b(\d{6})\b/);
