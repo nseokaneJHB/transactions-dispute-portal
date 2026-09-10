@@ -92,11 +92,18 @@ export const listDisputes = async (
 	request: FastifyRequest<ListDisputesRequest>,
 	reply: FastifyReply<ListDisputesRequest>,
 ): Promise<void> => {
-	const { status: statusFilter, order, page, limit } = request.query;
+	const {
+		status: statusFilter,
+		transaction_id: transactionId,
+		order,
+		page,
+		limit,
+	} = request.query;
 
 	const { rows, total } = await findDisputesByUser(request.server.connection, {
 		userId: request.user!.id,
 		status: statusFilter,
+		transactionId,
 		order,
 		page,
 		limit,
