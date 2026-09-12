@@ -13,7 +13,7 @@
 - [x] `docker compose up -d` on a clean checkout gives a working local stack incl. DB, migrations applied, zero setup — `.env` files committed with working local values (`docs/decisions.md` #34/#42). No standalone `docker build`/`run` — production containerisation is `docs/production-runbook.md` §1, not built.
 - [x] README build/run/test steps verified on a clean machine (fresh `git clone`: `docker compose up -d --wait` + `db:seed` gives the documented 31/4306/265 seed counts and all five endpoints respond; `pnpm install --frozen-lockfile` + `turbo lint typecheck build test` also green — 44/44 tests pass, dev DB untouched)
 - [x] CI green on default branch (build #18, `12924e0`, `.github/workflows/build.yml`)
-- [ ] Repo is public
+- [x] Repo is public
 
 ## Regression proof
 

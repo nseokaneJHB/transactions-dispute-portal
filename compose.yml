@@ -45,8 +45,8 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: "100"
 
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
 
     volumes:
       - .:/workspace
@@ -95,8 +95,8 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: "100"
 
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
 
     volumes:
       - .:/workspace
@@ -118,6 +118,32 @@ services:
       timeout: 3s
       retries: 3
       start_period: 90s
+
+    networks:
+      - transaction-dispute-portal
+
+  transaction-dispute-portal-proxy:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+
+    volumes:
+      - ./proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+
+    ports:
+      - "80:80"
+
+    depends_on:
+      transaction-dispute-portal-api:
+        condition: service_healthy
+      transaction-dispute-portal-web:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
 
     networks:
       - transaction-dispute-portal

@@ -18,6 +18,10 @@ export default defineConfig({
 	},
 	server: {
 		port: 3000,
+		allowedHosts: ["dispute-portal"],
+		hmr: {
+			clientPort: 80,
+		},
 		watch: {
 			ignored: ["!**/node_modules/@transaction-dispute-portal/shared/**"],
 		},

@@ -43,7 +43,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - DB: Postgres (`docs/decisions.md` #23)
 - Tests: Vitest
 - CI: GitHub Actions — lint/typecheck/build/test plus a `docker compose` smoke test of the dev stack. A real deploy pipeline is described in `docs/production-runbook.md`, not built
-- Containers: one dev `Dockerfile` per package + a single `compose.yml`. `docker compose up` is the entire local stack (Postgres, api, web, Mailpit, ntfy), migrations run on start, `db:seed` is one command. Production containerisation lives in `docs/production-runbook.md`, not built
+- Containers: one dev `Dockerfile` per package + a single `compose.yml`. `docker compose up` is the entire local stack (Postgres, api, web, Mailpit, ntfy, an nginx reverse proxy in front of web/api/ntfy — `docs/decisions.md` #61), migrations run on start, `db:seed` is one command. Production containerisation lives in `docs/production-runbook.md`, not built
 
 ## Explicitly out of scope
 
