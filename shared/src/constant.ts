@@ -1,5 +1,8 @@
 export const APP_NAME = "Transactions Dispute Portal" as const;
 
+/** IANA zone every transaction/dispute date is displayed and boundary-computed in, regardless of where the API or the viewer's browser runs. */
+export const BUSINESS_TIMEZONE = "Africa/Johannesburg" as const;
+
 export const DEFAULT_PAGE_LIMIT = 10 as const;
 export const DEFAULT_PAGE_NUMBER = 1 as const;
 export const MAX_PAGE_LIMIT = 100 as const;

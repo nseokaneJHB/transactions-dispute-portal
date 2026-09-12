@@ -73,8 +73,8 @@ jobs:
       - name: Bring up the stack
         run: docker compose up -d --build --wait --wait-timeout 300
 
-      - name: API is serving
-        run: curl -fsS http://localhost:8080/healthz
+      - name: API is serving (through the reverse proxy)
+        run: curl -fsS http://localhost/healthz
 
       - name: Seed loads cleanly
         run: docker compose exec -T transaction-dispute-portal-api pnpm --filter @transaction-dispute-portal/api db:seed

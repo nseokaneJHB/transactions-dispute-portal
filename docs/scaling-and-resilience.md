@@ -15,7 +15,7 @@ These exist so questions on scaling/failover/traffic/resilience have a real answ
 
 - Production DB is managed Postgres (RDS/Aurora Multi-AZ or Azure equivalent) — automated failover and backups; one line on the RTO/RPO tradeoff.
 - Read replica for the historic-disputes read path once write/read ratio justifies it — ties to the indexing story above.
-- ALB/API Gateway → ECS/Fargate or k8s Ingress in front of the stateless API — call out explicitly that the LB is only meaningful _because_ the API is stateless, don't list it as a bullet on its own.
+- ALB/API Gateway → ECS/Fargate or k8s Ingress in front of the stateless API — call out explicitly that the LB is only meaningful _because_ the API is stateless, don't list it as a bullet on its own. It also has a second job beyond load distribution: it's the stable domain the frontend is built against, so infra can move behind it without invalidating an already-built client bundle — see `docs/production-runbook.md` §3.
 - Event durability caveat: today the status-change event is in-process/simulated; production would move it to SQS/EventBridge so a notification-consumer failure can't affect the API request path.
 - Session-lookup cost: the load test (README "Performance") shows the DB-backed session check, not Postgres or Fastify, is the authenticated-route ceiling (~250 req/s vs ~3,700 for an unauthenticated DB round-trip on the same stack). The stateless-API tradeoff above is still the right call for horizontal scaling; the mitigation is a short-TTL cache on the session read (or Better Auth's cookie-cache / JWT session mode), not moving state back into the process.
 

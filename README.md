@@ -12,12 +12,17 @@ docker compose exec transaction-dispute-portal-api \
   pnpm --filter @transaction-dispute-portal/api db:seed
 ```
 
-`docker compose up -d` is the whole stack — Postgres, api, web, Mailpit, ntfy, source bind-mounted with `tsx`/`vite` watch. `api/.env`, `web/.env` and `env/development/.env.database` are committed with working local values (fake Postgres password, freshly-generated auth secrets; `docs/decisions.md` #34/#42). Migrations run automatically on api start; the `db:seed` line above loads demo data (once).
+`docker compose up -d` is the whole stack — Postgres, api, web, Mailpit, ntfy, an nginx reverse proxy, source bind-mounted with `tsx`/`vite` watch. `api/.env`, `web/.env` and `env/development/.env.database` are committed with working local values (fake Postgres password, freshly-generated auth secrets; `docs/decisions.md` #34/#42). Migrations run automatically on api start; the `db:seed` line above loads demo data (once).
 
-- Web: http://localhost:3000
-- API: http://localhost:8080
+The app is served under its own local hostname rather than bare `localhost` (`docs/decisions.md` #61) — add this line once, then leave it:
+
+```sh
+echo "127.0.0.1 dispute-portal" | sudo tee -a /etc/hosts
+```
+
+- App (web + api, behind an nginx reverse proxy — `docs/decisions.md` #61): http://dispute-portal — `/v1/*`, `/healthz`, `/readyz`, `/ntfy/*` route to the api/ntfy containers, everything else to web. Neither `web` nor `api` publishes its own port; the proxy is the only front door, matching a real deployment's shape. Use `dispute-portal`, not `localhost` — `CORS_ORIGIN`/cookies are scoped to it.
 - Mailpit (caught local email): http://localhost:8025
-- ntfy (dispute-status notifications): http://localhost:8090
+- ntfy web UI (watch notification topics directly): http://localhost:8090
 
 **Logging in:** login is email-OTP (`docs/decisions.md` #21) — enter an account's email, then check `http://localhost:8025` for the one-time code. Nothing is really "sent" anywhere: SMTP points at the local Mailpit catcher. Seeded accounts: `thelowlydev@gmail.com` (admin), `customer@example.com` (long history), `newcomer@example.com` (no disputes). To use a real inbox instead, put a real Gmail App Password in `SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` in `api/.env` or an untracked `api/.env.local`.
 

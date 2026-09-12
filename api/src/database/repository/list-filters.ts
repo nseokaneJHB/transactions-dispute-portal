@@ -9,10 +9,17 @@ import {
 	type Column,
 	type SQL,
 } from "drizzle-orm";
-import { endOfDay, parseISO, startOfDay } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
 
-import { ORDER_DIRECTION } from "@transaction-dispute-portal/shared";
+import { BUSINESS_TIMEZONE, ORDER_DIRECTION } from "@transaction-dispute-portal/shared";
 import type { OrderDirection } from "@transaction-dispute-portal/shared";
+
+/** `from`/`to` are `YYYY-MM-DD` calendar dates in `BUSINESS_TIMEZONE`; these convert a day's boundaries to the UTC instants the timestamp columns are compared against. */
+const startOfBusinessDay = (dateOnly: string): Date =>
+	fromZonedTime(`${dateOnly}T00:00:00.000`, BUSINESS_TIMEZONE);
+
+const endOfBusinessDay = (dateOnly: string): Date =>
+	fromZonedTime(`${dateOnly}T23:59:59.999`, BUSINESS_TIMEZONE);
 
 /** One page of rows plus the full (unpaginated) match count. */
 export interface Page<T> {
@@ -43,8 +50,9 @@ export const containsText = (
 /**
  * An inclusive predicate for a `[from, to]` date-only range (`YYYY-MM-DD`) over
  * a timestamp `column` — `from` snaps to the start of its day and `to` to the
- * end of its, so both ends cover the whole day. `undefined` when neither bound
- * is set, so it drops cleanly out of an `and()`.
+ * end of its, both in `BUSINESS_TIMEZONE` regardless of the server's own clock,
+ * so both ends cover the whole business day. `undefined` when neither bound is
+ * set, so it drops cleanly out of an `and()`.
  */
 export const withinDays = (
 	column: Column,
@@ -52,8 +60,8 @@ export const withinDays = (
 	to: string | undefined,
 ): SQL | undefined =>
 	and(
-		from ? gte(column, startOfDay(parseISO(from))) : undefined,
-		to ? lte(column, endOfDay(parseISO(to))) : undefined,
+		from ? gte(column, startOfBusinessDay(from)) : undefined,
+		to ? lte(column, endOfBusinessDay(to)) : undefined,
 	);
 
 /** The Drizzle order helper for the requested direction — descending when unset. */
