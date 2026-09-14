@@ -116,6 +116,27 @@ describe("admin invites", () => {
 		expect(response.statusCode).toBe(409);
 	});
 
+	it("collapses concurrent invites to the same email to a single pending invite", async () => {
+		const email = "raced-invitee@test.local";
+
+		const results = await Promise.all(
+			Array.from({ length: 5 }, () => invite(app, admin, email)),
+		);
+
+		expect(results.filter((r) => r.statusCode === 201)).toHaveLength(1);
+		expect(results.filter((r) => r.statusCode === 409)).toHaveLength(4);
+
+		const list = await app.inject({
+			method: "GET",
+			url: "/v1/admin/invites?limit=100",
+			headers: { cookie: admin.cookie },
+		});
+		const forEmail = (
+			list.json().data as Array<{ email: string }>
+		).filter((row) => row.email === email);
+		expect(forEmail).toHaveLength(1);
+	});
+
 	it("sends an invite and creates an ADMIN account on accept", async () => {
 		await clearInbox();
 		const email = "invitee@test.local";

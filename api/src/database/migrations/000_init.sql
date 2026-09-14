@@ -125,6 +125,7 @@ CREATE INDEX "admin_invite_email_idx" ON "admin_invite" USING btree ("email");--
 CREATE INDEX "admin_invite_invited_by_idx" ON "admin_invite" USING btree ("invited_by");--> statement-breakpoint
 CREATE INDEX "admin_invite_updated_idx" ON "admin_invite" USING btree ("updated_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "admin_invite_token_uq_idx" ON "admin_invite" USING btree ("token");--> statement-breakpoint
+CREATE UNIQUE INDEX "admin_invite_pending_per_email_uq_idx" ON "admin_invite" USING btree ("email") WHERE "admin_invite"."accepted_at" is null;--> statement-breakpoint
 CREATE INDEX "auth_audit_log_email_idx" ON "auth_audit_log" USING btree ("email");--> statement-breakpoint
 CREATE INDEX "auth_audit_log_event_idx" ON "auth_audit_log" USING btree ("event");--> statement-breakpoint
 CREATE INDEX "auth_audit_log_user_id_idx" ON "auth_audit_log" USING btree ("user_id");--> statement-breakpoint

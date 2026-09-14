@@ -100,22 +100,6 @@ export const startDisputeReview = async (
 		return reply.status(status).send({ code, message: "Dispute not found." });
 	}
 
-	if (dispute.status === DISPUTE_STATUS.UNDER_REVIEW) {
-		const { status, code } = HTTP_RESPONSE_CODE.OK;
-		return reply.status(status).send({
-			code,
-			message: "Dispute is already under review.",
-			data: toWire(dispute),
-		});
-	}
-
-	if (dispute.status !== DISPUTE_STATUS.SUBMITTED) {
-		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
-		return reply
-			.status(status)
-			.send({ code, message: "This dispute is already closed." });
-	}
-
 	const reviewed = await request.server.connection.transaction(async (tx) => {
 		const row = await markDisputeUnderReview(tx, { id: disputeId });
 		if (!row) return undefined;
@@ -135,21 +119,34 @@ export const startDisputeReview = async (
 		};
 	});
 
-	if (!reviewed) {
-		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
-		return reply
-			.status(status)
-			.send({ code, message: "This dispute is no longer awaiting review." });
+	if (reviewed) {
+		await publishDisputeUpdate(reviewed.user_id, reviewed.status);
+
+		const { status, code } = HTTP_RESPONSE_CODE.OK;
+		return reply.status(status).send({
+			code,
+			message: "Dispute moved to review.",
+			data: toWire(reviewed),
+		});
 	}
 
-	await publishDisputeUpdate(reviewed.user_id, reviewed.status);
-
-	const { status, code } = HTTP_RESPONSE_CODE.OK;
-	return reply.status(status).send({
-		code,
-		message: "Dispute moved to review.",
-		data: toWire(reviewed),
+	const current = await findDisputeById(request.server.connection, {
+		id: disputeId,
 	});
+
+	if (current?.status === DISPUTE_STATUS.UNDER_REVIEW) {
+		const { status, code } = HTTP_RESPONSE_CODE.OK;
+		return reply.status(status).send({
+			code,
+			message: "Dispute is already under review.",
+			data: toWire(current),
+		});
+	}
+
+	const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
+	return reply
+		.status(status)
+		.send({ code, message: "This dispute is no longer awaiting review." });
 };
 
 /** `POST /v1/admin/disputes/:disputeId/resolve` — close a dispute that is under review. */

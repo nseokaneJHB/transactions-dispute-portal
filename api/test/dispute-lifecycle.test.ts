@@ -207,4 +207,34 @@ describe("dispute lifecycle transitions", () => {
 		});
 		expect(response.statusCode).toBe(404);
 	});
+
+	it("is idempotent on review under real concurrency, not just sequential calls", async () => {
+		const id = await submit(app, alice.cookie, data.aliceTransactionIds[2]);
+
+		const results = await Promise.all(
+			Array.from({ length: 8 }, () =>
+				app.inject({
+					method: "POST",
+					url: `/v1/admin/disputes/${id}/review`,
+					headers: { cookie: admin.cookie },
+				}),
+			),
+		);
+
+		expect(results.every((r) => r.statusCode === 200)).toBe(true);
+		expect(
+			results.every((r) => r.json().data.status === "UNDER_REVIEW"),
+		).toBe(true);
+
+		const auditRows = await connection
+			.select({ id: DisputeAuditLogModel.id })
+			.from(DisputeAuditLogModel)
+			.where(
+				and(
+					eq(DisputeAuditLogModel.dispute_id, id),
+					eq(DisputeAuditLogModel.to_status, "UNDER_REVIEW"),
+				),
+			);
+		expect(auditRows).toHaveLength(1);
+	});
 });

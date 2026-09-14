@@ -26,7 +26,7 @@ const createClient = (): ReturnType<typeof postgres> =>
 		prepare: false,
 		idle_timeout: 30,
 		connect_timeout: 10,
-		max: isProduction ? 10 : 1,
+		max: env.DB_POOL_MAX,
 	});
 
 /**
