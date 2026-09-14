@@ -151,7 +151,7 @@ export const findAdminInviteByToken = async (
 
 /**
  * Mark an unexpired, unaccepted invite as accepted. The "still valid" check is
- * in the `where` clause, not a prior read (`docs/decisions.md` #4 / #41) — a
+ * in the `where` clause, not a prior read (`docs/progress-and-decisions.md` #4 / #41) — a
  * concurrent accept matches nothing and gets `undefined`, the caller's 409.
  */
 export const acceptAdminInvite = async (

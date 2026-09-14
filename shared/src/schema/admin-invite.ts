@@ -17,7 +17,7 @@ import { ADMIN_INVITE_SORT } from "../constant.js";
 
 /**
  * Body for `POST /v1/admin/invites` — an existing admin invites a new admin by
- * email. No self-service admin signup (`docs/decisions.md` #16); accepting the
+ * email. No self-service admin signup (`docs/progress-and-decisions.md` #16); accepting the
  * emailed link is the only way an admin account is created.
  */
 export const adminInviteCreateBodySchema = z.object({

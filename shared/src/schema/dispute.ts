@@ -21,7 +21,7 @@ import { ADMIN_DISPUTE_SORT, DISPUTE_SORT } from "../constant.js";
 /**
  * Body for `POST /v1/disputes` — open a dispute on one of the caller's own
  * transactions. At most one open dispute per transaction is enforced
- * server-side (`docs/decisions.md` #4).
+ * server-side (`docs/progress-and-decisions.md` #4).
  */
 export const disputeCreateBodySchema = z.object({
 	transactionId: uuidSchema,
@@ -87,7 +87,7 @@ export const disputeTransactionSchema = z.object({
 
 /**
  * One dispute on the wire. Field names mirror the `dispute` table's columns
- * (`docs/decisions.md` #30) so there is no rename layer; timestamps are ISO
+ * (`docs/progress-and-decisions.md` #30) so there is no rename layer; timestamps are ISO
  * 8601 strings. `user_id` is omitted — it is always the caller.
  */
 export const disputeSchema = z.object({

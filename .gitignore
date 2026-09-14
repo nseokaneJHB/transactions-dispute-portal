@@ -23,7 +23,7 @@ logs/
 *.log
 npm-debug.log*
 
-# Environment files (committed with working local values — docs/decisions.md #34; only per-developer overrides ignored)
+# Environment files (committed with working local values — docs/progress-and-decisions.md #34; only per-developer overrides ignored)
 *.env.local
 .env.local
 */.env.local

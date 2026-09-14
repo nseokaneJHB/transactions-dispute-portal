@@ -19,7 +19,7 @@ interface CreatedSession {
 /**
  * Fire a new-device alert if this session's `user_agent` has not been seen on
  * the account before. Best-effort and non-blocking — never part of the login
- * response (`docs/auth.md` §3). A missing `user_agent` is skipped: it can't be
+ * response (`docs/backend-service.md` §3). A missing `user_agent` is skipped: it can't be
  * matched against history and only non-browser clients omit it.
  */
 export const alertOnNewDeviceLogin = async (
