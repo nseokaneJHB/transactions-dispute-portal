@@ -177,7 +177,7 @@ export type ApiNamespace = "AUTH" | "ADMIN" | "HEALTH" | "CUSTOMER";
 
 /**
  * Resolve each API namespace to its concrete base path for a given version.
- * Health checks stay unversioned (`docs/decisions.md` #18) — infra probes are
+ * Health checks stay unversioned (`docs/progress-and-decisions.md` #18) — infra probes are
  * not API consumers — so `HEALTH` resolves to an empty prefix. `CUSTOMER` is
  * the customer-facing product surface mounted at the bare version root, as
  * opposed to the invite-only `ADMIN` back-office; every route under it still

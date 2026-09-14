@@ -12,7 +12,7 @@ import { refreshQuery } from "@/lib/query";
 /**
  * Subscribe to the caller's per-user ntfy topic and surface a toast whenever a
  * dispute of theirs changes status (the event-driven notification from
- * `docs/notifications.md`). Live, self-hosted, best-effort — a dropped stream
+ * `docs/dev-tools.md`). Live, self-hosted, best-effort — a dropped stream
  * never affects the page.
  */
 export const useDisputeNotifications = (userId: string): void => {

@@ -12,7 +12,7 @@ interface PageInput<T> {
 
 /**
  * Build the paginated response envelope every list endpoint returns
- * (`docs/api.md` — `count` is the full match total, `total` the rows on this
+ * (`docs/backend-service.md` — `count` is the full match total, `total` the rows on this
  * page). Returned as a plain object so the caller's `reply.send(...)` is still
  * checked against the route's zod response schema.
  */

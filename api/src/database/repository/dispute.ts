@@ -324,7 +324,7 @@ export const findDisputeById = async (
 
 /**
  * Move a `SUBMITTED` dispute to `UNDER_REVIEW`. The current-status check is in
- * the `where` clause, not a prior read (`docs/decisions.md` #4) — a concurrent
+ * the `where` clause, not a prior read (`docs/progress-and-decisions.md` #4) — a concurrent
  * call matches nothing and gets `undefined`, the caller's 409.
  */
 export const markDisputeUnderReview = async (

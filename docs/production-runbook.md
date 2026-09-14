@@ -10,7 +10,7 @@ docker compose exec transaction-dispute-portal-api \
 
 There is one `compose.yml`, one `Dockerfile` per package (a dev image: full workspace, `tsx`/`vite` watch, source bind-mounted), one committed `.env` per package plus `env/development/.env.database`. No live deployment, no staging, no production images are built anywhere.
 
-That is a deliberate scope choice (`docs/decisions.md` #34, and the earlier #24–#27 / #32–#33 that built — then this pass removed — a staging pipeline). This document is the step-by-step for the reviewer's question *"and how would you actually ship this?"*. Nothing here is wired; each section is what you would add.
+Deliberate scope choice (`docs/progress-and-decisions.md` #34, and the earlier #24–#27/#32–#33 that built — then this pass removed — a staging pipeline). This document answers *"and how would you actually ship this?"*: nothing here is wired, each section is what you'd add.
 
 ---
 
@@ -31,37 +31,84 @@ The dev `Dockerfile` installs devDependencies and runs the TypeScript source thr
 
 Notes carried over from when this existed:
 
-- `shared/dist` loads `zod` at module-eval time, and the api runtime imports `shared` — so `shared/node_modules` must ship in the runtime stage, not just `api/node_modules`.
-- The web SSR build externalises `react` / `react-dom` rather than bundling them, so the web runtime stage still needs `node_modules` alongside `dist/`.
-- `drizzle-kit` stays a devDependency and never ships; the runtime uses the standalone `src/database/migrate.ts` runner (`node dist/database/migrate.js`).
+- `shared/dist` loads `zod` at module-eval time and the api runtime imports `shared`, so `shared/node_modules` must ship in the runtime stage too, not just `api/node_modules`.
+- The web SSR build externalises `react`/`react-dom` rather than bundling them, so the web runtime stage still needs `node_modules` alongside `dist/`.
+- `drizzle-kit` stays a devDependency, never ships; the runtime uses the standalone `src/database/migrate.ts` runner (`node dist/database/migrate.js`).
 
-Running the compiled artifact instead of `tsx` on source is what buys the fail-fast `tsc` gate in CI, a small attack surface, fast cold starts, and a deterministic artifact — see the discussion in the session notes / `docs/decisions.md`.
+Compiled artifact over `tsx` on source buys the fail-fast `tsc` gate in CI, a smaller attack surface, fast cold starts, a deterministic artifact.
 
 ## 2. Configuration and secrets
 
-Committed env files hold **working local-only fakes** (`docs/decisions.md` #34): a throwaway Postgres password, freshly-generated `BETTER_AUTH_SECRET` / `COOKIE_SECRET`, `SMTP_*` pointed at Mailpit, `NTFY_URL=http://ntfy`.
+Committed env files hold **working local-only fakes** (`docs/progress-and-decisions.md` #34): a throwaway Postgres password, freshly-generated `BETTER_AUTH_SECRET` / `COOKIE_SECRET`, `SMTP_*` pointed at Mailpit, `NTFY_URL=http://ntfy`.
 
 A real deployment:
 
 - injects every value from the orchestrator's secret store (Kubernetes `Secret`, cloud secret manager) — **no `.env` file in the image or the repo**;
 - generates fresh `BETTER_AUTH_SECRET` and `COOKIE_SECRET` (32+ bytes each) per environment;
 - sets `NODE_ENV=production`, real `API_URL` / `FRONTEND_URL` / `CORS_ORIGIN`;
-- keeps a real Gmail App Password (or SES/Postmark credentials) out of git — locally that already goes in an untracked `api/.env.local` (`docs/domain-model.md`), in production it is an orchestrator secret.
+- keeps a real Gmail App Password (or SES/Postmark credentials) out of git — locally that already goes in an untracked `api/.env.local` (`docs/requirements.md`), in production it is an orchestrator secret.
 
 ## 3. Networking: a stable public API URL, not a raw infra address
 
-`web/.env`'s `VITE_API_URL` is a Vite **build-time** env var — Vite inlines it as a literal string into the client JS bundle when `web` is built, so it ships to every browser baked in. `SERVER_API_URL` is different: server-side code reads it from `process.env` at request time (SSR runs in Node, never in a browser), so a change there takes effect on the next server restart with no client involved at all. The risk is entirely on the `VITE_*` side.
+`VITE_API_URL` is a Vite **build-time** var — inlined as a literal string into the client JS bundle, shipped to every browser. `SERVER_API_URL` is read from `process.env` at request time (SSR, Node-only), so it updates on the next server restart with no client involved. The risk is entirely on the `VITE_*` side: if it points at a raw infra address (an ALB's auto-generated DNS name, an ECS task IP) that changes when compute moves, every already-built bundle — including one open in a customer's browser right now — has that address hardcoded and starts failing the moment the old address stops resolving, with no way to fix it short of a fresh build.
 
-That's the mechanism behind the "if we move to AWS with a new URL, what happens to a client already on the frontend" question. If `VITE_API_URL` points at a raw infrastructure address — an ALB's auto-generated DNS name, an ECS task's IP, anything that changes when compute moves — then every already-built `web` bundle has that address hardcoded, including one sitting open in a customer's browser right now. Moving infrastructure means that bundle's requests start failing the moment the old address stops resolving, and there's no way to push it a new URL short of the customer getting a fresh build (a reload after a redeploy, at best).
+**Mitigation: `VITE_API_URL` points at one owned domain behind a reverse proxy / load balancer, never at infrastructure directly.**
 
-**Mitigation: `VITE_API_URL` never points at infrastructure directly — it points at one owned domain that a reverse proxy / load balancer sits behind**, and that domain is the only thing ever baked into a client bundle:
+| Shape | Indirection | Result |
+| --- | --- | --- |
+| AWS | Route53 `api.<yourdomain>` → ALB (+ optional CloudFront) → target group → whatever's serving traffic (ECS service, EKS Ingress, EC2 ASG) | Migrating infra (new region, ECS → EKS, new account) just repoints the target group; the built-in URL never changes, no rebuild, no customer-visible break |
+| Kubernetes (§8) | `Ingress` is the reverse proxy: `api.<yourdomain>` → `Ingress` → `Service` → live `Deployment` pods | Swapping deployments behind a `Service` is invisible above the `Ingress` |
+| This dev stack, today | nginx (`docs/progress-and-decisions.md` #61, `proxy/nginx.conf`) in front of `web`/`api`/`ntfy`; only the proxy publishes `:80` | A one-file toy version of the same proof, live: build against one address, swap what's behind it freely |
 
-- **AWS shape:** a Route53 record for `api.<yourdomain>` → an Application Load Balancer (optionally CloudFront in front of it) → a target group pointing at whatever's currently serving traffic (an ECS service, an EKS Ingress, an EC2 Auto Scaling Group). Migrating infrastructure — new region, ECS → EKS, a whole new AWS account — is a change to what the target group points at. The frontend's built-in URL never changes, so no rebuild is needed and a customer mid-session never notices.
-- **Kubernetes shape (§8 below):** the same indirection one layer down — `Ingress` *is* that reverse proxy: `api.<yourdomain>` → `Ingress` → `Service` → whichever `Deployment`'s pods are currently live. Swapping deployments behind a `Service` is invisible above the `Ingress` line.
-- **This is now the dev stack's actual shape, not just prose:** `docs/decisions.md` #61 puts an nginx reverse proxy (`proxy/nginx.conf`) in front of `web`/`api`/`ntfy` in `compose.yml` — neither service publishes its own port any more, the proxy on `:80` is the only one that does. It's a toy version of exactly this section (one static config file instead of Route53 + an ALB + a target group), but it proves the same point live: the frontend is built against one address that never changes, and what's behind it can be swapped freely.
-- The same reasoning applies to every other client-facing URL: `FRONTEND_URL` / `CORS_ORIGIN` (§2) and `NTFY_URL` (§6) should resolve through a domain the team owns, never a cloud-generated hostname, for the same reason.
+Same reasoning applies to every other client-facing URL — `FRONTEND_URL` / `CORS_ORIGIN` (§2), `NTFY_URL` (§6) — resolve through an owned domain, never a cloud-generated hostname.
 
-**Further indirection, if it's ever worth the change:** serving `web` and `api` from the same origin (the reverse proxy routes `/api/*` on the frontend's own domain to the backend, instead of a separate `api.<yourdomain>`) removes even the domain-name dependency — `VITE_API_URL` becomes a relative path (`/api`) that's true by construction, nothing to bake in that could ever go stale. Not the default recommendation here: it changes the CORS/cookie model this repo's current auth flow relies on (`docs/decisions.md` #51's `withCredentials` + explicit `CORS_ORIGIN`), so it's a real architectural decision, not a networking tweak — worth its own `docs/decisions.md` entry if it's ever actually pursued, not built speculatively now.
+**Production goes one step further than the dev stack: `api` isn't reachable from the internet at all.** The dev nginx (#61) is infra-level path routing — one address for both, but a browser request for `/v1/disputes` still terminates at the `api` container; nginx just fronts two independently-reachable services. That's enough to prove the one-stable-address claim, but `api` is still a public endpoint. Production closes that: the client holds exactly one address, and everything but `web` sits in a private network with no public IP.
+
+```mermaid
+flowchart LR
+    Browser(["Browser<br/>customer / admin"])
+
+    subgraph Edge["public edge — app.yourdomain.com"]
+        direction TB
+        DNS["Route53 / DNS"]
+        LB["ALB or Ingress<br/>TLS termination"]
+    end
+
+    subgraph Private["private network — no public IPs"]
+        direction TB
+        Web["web pods<br/>TanStack Start"]
+        Api["api pods<br/>Fastify"]
+        Db[("managed Postgres<br/>RDS / Cloud SQL")]
+    end
+
+    subgraph External["external providers, outbound only"]
+        direction TB
+        Smtp["SES / Postmark<br/>real SMTP"]
+        Push["self-hosted ntfy (private)<br/>or a real push provider"]
+    end
+
+    Browser -->|"the only address a client ever holds"| DNS
+    DNS --> LB
+    LB -->|"every route, including what looks like /api/*"| Web
+    Web -.->|"server-side forward<br/>ClusterIP / service mesh, never via the edge"| Api
+    Api --> Db
+    Api -.->|outbound only| Smtp
+    Api -.->|outbound only| Push
+
+    classDef proxy fill:#f6e9d3,stroke:#97600f,color:#4a3208,stroke-width:1.5px;
+    classDef app fill:#dbe6f5,stroke:#31578f,color:#1c3252;
+    classDef data fill:#dcefe1,stroke:#1f7a4d,color:#123f28;
+    classDef client fill:#eceee9,stroke:#57655d,color:#2c332e;
+
+    class DNS,LB proxy
+    class Web,Api app
+    class Db,Smtp,Push data
+    class Browser client
+```
+
+Concretely: `web`'s server gains `/api/*` routes forwarding to `api` over the internal network (`SERVER_API_URL` — the same mechanism SSR loaders already use, extended to cover browser calls too). `VITE_API_URL` becomes a same-origin relative path (`/api`) — nothing bakeable that could go stale — and `api` drops out of the `Ingress`/`ALB` routing table, reachable only inside the cluster. §8's `Ingress`/`Service` shape still applies; `api`'s `Service` is just `ClusterIP`-only, never attached to the `Ingress`.
+
+A real architectural decision, not a tweak: it flips the CORS/cookie model (`docs/progress-and-decisions.md` #51's `withCredentials` + explicit `CORS_ORIGIN` becomes same-origin, cookies can go `SameSite=Strict`, `web`'s forwarding layer relays the session cookie on every proxied call) — worth its own decision entry if actually pursued, not built here.
 
 ## 4. Database
 
@@ -71,24 +118,24 @@ That's the mechanism behind the "if we move to AWS with a new URL, what happens 
 
 ### Migrations as their own gated step
 
-Do **not** run migrations from the app's start command in production (the dev `compose.yml` does this only because it is safe to re-run against a disposable database). A schema change is a reviewed, approved step, independent of the code rollout (`docs/decisions.md` #24).
+Do **not** run migrations from the app's start command in production (the dev `compose.yml` only does this because it's safe to re-run against a disposable database). A schema change is a reviewed, approved step, independent of the code rollout (`docs/progress-and-decisions.md` #24).
 
-The shape that existed before (`.github/workflows/migrate.yml`, removed in `docs/decisions.md` #42): `workflow_dispatch` → `drizzle-kit check` (snapshot/drift guard, no DB needed) → fail if the environment's `DATABASE_URL` secret is missing → `pnpm --filter @transaction-dispute-portal/api migrate`. `concurrency` with `cancel-in-progress: false` so two runs never touch one database at once.
+The shape that existed before (`.github/workflows/migrate.yml`, removed in `docs/progress-and-decisions.md` #42): `workflow_dispatch` → `drizzle-kit check` (snapshot/drift guard, no DB needed) → fail if the environment's `DATABASE_URL` secret is missing → `pnpm --filter @transaction-dispute-portal/api migrate`. `concurrency` with `cancel-in-progress: false` so two runs never touch one database at once.
 
 ## 5. Email (SMTP) — on the login-critical path
 
-Login is email-OTP (`docs/decisions.md` #21, `docs/auth.md` §2): every sign-in sends a code over SMTP, so outbound email is a hard dependency, not best-effort.
+Login is email-OTP (`docs/progress-and-decisions.md` #21, `docs/backend-service.md` §2): every sign-in sends a code over SMTP, so outbound email is a hard dependency, not best-effort.
 
 - Real transactional provider (SES, Postmark, SendGrid), authenticated domain (SPF/DKIM/DMARC).
-- `sendEmail` currently swallows transport errors (`docs/decisions.md` #31) — in production, surface them: alert on send-failure rate, and consider a fallback provider.
+- `sendEmail` currently swallows transport errors (`docs/progress-and-decisions.md` #31) — in production, surface them: alert on send-failure rate, and consider a fallback provider.
 - Rate-limit knobs are `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW` (global) and `OTP.MAX_ATTEMPTS` (per-OTP, shared constant); the auth routes inherit the global window.
 
 ## 6. Notifications (ntfy)
 
-Dispute-status changes publish to a per-user ntfy topic (`docs/notifications.md`). This is explicitly a *simulated* notification channel — not real push/SMS.
+Dispute-status changes publish to a per-user ntfy topic (`docs/dev-tools.md`). This is explicitly a *simulated* notification channel — not real push/SMS.
 
 - Dev: the `ntfy` service in `compose.yml`, web UI on `localhost:8090`.
-- Production: either run a self-hosted ntfy instance and set `NTFY_URL` to it, or accept that this stays a demo affordance. It must never carry auth credentials (OTP codes) — see the scope boundary in `docs/notifications.md`.
+- Production: either run a self-hosted ntfy instance and set `NTFY_URL` to it, or accept that this stays a demo affordance. It must never carry auth credentials (OTP codes) — see the scope boundary in `docs/dev-tools.md`.
 
 ## 7. CI/CD
 
@@ -98,16 +145,16 @@ To deploy, add a workflow that on `main`:
 
 1. reuses the check job (`workflow_call`), then
 2. builds the multi-stage `api` / `web` images and pushes them to a registry (GHCR: `ghcr.io/<owner>/transaction-dispute-portal-{api,web}`), tagged `sha-<commit>` and `latest`;
-3. deploys — `kubectl apply` / Helm / Argo — into an environment protected by GitHub **Environments** required-reviewers (configured in repo Settings → Environments, not expressible in YAML — `docs/decisions.md` #25).
+3. deploys — `kubectl apply` / Helm / Argo — into an environment protected by GitHub **Environments** required-reviewers (configured in repo Settings → Environments, not expressible in YAML — `docs/progress-and-decisions.md` #25).
 
-Build tags explicitly from `github.sha` / `github.ref_name`, not `docker/metadata-action` (`docs/decisions.md` #25). Keep migrations (§4) a separate manually-approved workflow, not a step here.
+Build tags explicitly from `github.sha` / `github.ref_name`, not `docker/metadata-action` (`docs/progress-and-decisions.md` #25). Keep migrations (§4) a separate manually-approved workflow, not a step here.
 
 ## 8. Kubernetes
 
 `k8s/` manifests are not in the repo yet (CLAUDE.md lists them as a bonus). A minimal set:
 
 - `Deployment` for api and web, `Service` each, `Ingress` with TLS.
-- Probes wired to the endpoints that exist for exactly this: `livenessProbe` → `GET /healthz`, `readinessProbe` → `GET /readyz` (the latter does a 2s `select 1`, so it fails the pod out of rotation when the DB is unreachable — `docs/scaling-and-resilience.md`).
+- Probes wired to the endpoints that exist for exactly this: `livenessProbe` → `GET /healthz`, `readinessProbe` → `GET /readyz` (the latter does a 2s `select 1`, so it fails the pod out of rotation when the DB is unreachable — `docs/backend-service.md`).
 - `HorizontalPodAutoscaler` on CPU / RPS.
 - Secrets from a `Secret` (or External Secrets Operator), config from a `ConfigMap`.
 - A one-shot `Job` (or Argo pre-sync hook) for the migration step.

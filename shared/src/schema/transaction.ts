@@ -28,7 +28,7 @@ export const transactionsQuerySchema = paginationQuerySchema
 
 /**
  * One transaction on the wire. Field names mirror the `transaction` table's
- * columns (`docs/decisions.md` #30) so there is no rename layer; timestamps
+ * columns (`docs/progress-and-decisions.md` #30) so there is no rename layer; timestamps
  * are ISO 8601 strings.
  */
 export const transactionSchema = z.object({

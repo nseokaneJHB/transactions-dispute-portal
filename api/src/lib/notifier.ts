@@ -4,7 +4,7 @@ const PUBLISH_TIMEOUT_MS = 2000;
 
 /**
  * Publish a dispute's new status to its owner's per-user ntfy topic
- * (`docs/notifications.md`). Best-effort — a failed or slow publish is logged
+ * (`docs/dev-tools.md`). Best-effort — a failed or slow publish is logged
  * and swallowed, never blocking or failing the resolve request.
  *
  * @param userId - The dispute owner; scopes the topic so one customer's
