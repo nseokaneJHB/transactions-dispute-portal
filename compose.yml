@@ -131,12 +131,18 @@ services:
 
     ports:
       - "80:80"
+      - "8025:8025"
+      - "8090:8090"
 
     depends_on:
       transaction-dispute-portal-api:
         condition: service_healthy
       transaction-dispute-portal-web:
         condition: service_healthy
+      transaction-dispute-portal-mailpit:
+        condition: service_started
+      transaction-dispute-portal-ntfy:
+        condition: service_started
 
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/healthz || exit 1"]
@@ -152,8 +158,10 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
 
+    expose:
+      - "8025"
+
     ports:
-      - "8025:8025"
       - "1025:1025"
 
     networks:
@@ -170,8 +178,8 @@ services:
       NTFY_BASE_URL: http://localhost:8090
       NTFY_LISTEN_HTTP: ":80"
 
-    ports:
-      - "8090:80"
+    expose:
+      - "80"
 
     networks:
       transaction-dispute-portal:
