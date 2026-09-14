@@ -14,6 +14,7 @@ const envSchema = z.object({
 		.default("v1"),
 
 	DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+	DB_POOL_MAX: z.string().default("10").transform(Number),
 
 	CORS_ORIGIN: z
 		.string()

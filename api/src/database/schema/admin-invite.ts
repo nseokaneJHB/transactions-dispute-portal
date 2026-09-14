@@ -37,6 +37,10 @@ export const AdminInviteModel = pgTable(
 		index("admin_invite_updated_idx").on(table.updated_at),
 
 		uniqueIndex("admin_invite_token_uq_idx").on(table.token),
+
+		uniqueIndex("admin_invite_pending_per_email_uq_idx")
+			.on(table.email)
+			.where(sql`${table.accepted_at} is null`),
 	],
 );
 

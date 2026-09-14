@@ -1,5 +1,5 @@
 {
-  "id": "e75f5448-be51-453e-8b4d-3fd193009368",
+  "id": "26093849-2ebd-4d78-a1a4-2b85c73d8e4c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -283,6 +283,22 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "admin_invite_pending_per_email_uq_idx": {
+          "name": "admin_invite_pending_per_email_uq_idx",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"admin_invite\".\"accepted_at\" is null",
           "concurrently": false,
           "method": "btree",
           "with": {}
