@@ -58,7 +58,7 @@ A real deployment:
 | --- | --- | --- |
 | AWS | Route53 `api.<yourdomain>` → ALB (+ optional CloudFront) → target group → whatever's serving traffic (ECS service, EKS Ingress, EC2 ASG) | Migrating infra (new region, ECS → EKS, new account) just repoints the target group; the built-in URL never changes, no rebuild, no customer-visible break |
 | Kubernetes (§8) | `Ingress` is the reverse proxy: `api.<yourdomain>` → `Ingress` → `Service` → live `Deployment` pods | Swapping deployments behind a `Service` is invisible above the `Ingress` |
-| This dev stack, today | nginx (`docs/progress-and-decisions.md` #61, `proxy/nginx.conf`) in front of `web`/`api`/`ntfy`; only the proxy publishes `:80` | A one-file toy version of the same proof, live: build against one address, swap what's behind it freely |
+| This dev stack, today | nginx (`docs/progress-and-decisions.md` #61/#64, `proxy/nginx.conf`) in front of `web`/`api`/`ntfy`/`mailpit`; only the proxy publishes app-facing ports (`:80`/`:8025`/`:8090`) | A one-file toy version of the same proof, live: build against one address, swap what's behind it freely |
 
 Same reasoning applies to every other client-facing URL — `FRONTEND_URL` / `CORS_ORIGIN` (§2), `NTFY_URL` (§6) — resolve through an owned domain, never a cloud-generated hostname.
 

@@ -2,7 +2,7 @@
 
 ## Progress
 
-Backend and web frontend are both feature-complete. The Fastify API implements every planned module — auth (email-OTP sign-in, a session endpoint for the client, a two-step email change), transactions, disputes (submit/list/detail/withdraw), the admin review-then-resolve flow, and invite-only admin account creation — backed by a 63-test Vitest integration suite running in CI against real Postgres and Mailpit. `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy, with every customer and admin flow given a manual browser pass on top of its own unit tests. Two regression passes after the app first worked end to end fixed a post-mutation UI staleness bug, a missing-transaction-context gap, and a cross-user 404 crash (#52–#56), then consolidated the four list pages behind one generic `<DataList>`, added per-status review-queue stat cards, and put a real nginx reverse proxy in front of the whole dev stack (#57–#61). A later live-browser session found and fixed a dead toast-notification bug (#63). `docs/user-stories.md` walks every flow end to end per role; `docs/codebase-index.md` maps the repo file by file.
+Backend and web frontend are both feature-complete. The Fastify API implements every planned module — auth (email-OTP sign-in, a session endpoint for the client, a two-step email change), transactions, disputes (submit/list/detail/withdraw), the admin review-then-resolve flow, and invite-only admin account creation — backed by a 65-test Vitest integration suite running in CI against real Postgres and Mailpit. `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy, with every customer and admin flow given a manual browser pass on top of its own unit tests. Two regression passes after the app first worked end to end fixed a post-mutation UI staleness bug, a missing-transaction-context gap, and a cross-user 404 crash (#52–#56), then consolidated the four list pages behind one generic `<DataList>`, added per-status review-queue stat cards, and put a real nginx reverse proxy in front of the whole dev stack (#57–#61). A later live-browser session found and fixed a dead toast-notification bug (#63). `docs/user-stories.md` walks every flow end to end per role; `docs/codebase-index.md` maps the repo file by file.
 
 ### Definition of done
 
@@ -504,3 +504,11 @@ _Correction (#62):_ two of this entry's "solved" claims didn't actually hold up 
 **How it solves the problem:** Verified live, isolating the fix from an unrelated confound (an `EventSource` cross-origin failure that briefly looked like the fix hadn't worked) — the previously-dead `<Toaster/>` now paints correctly and consistently, including on a fresh hard reload.
 
 _Follow-up (2026-09-13):_ the pipeline was reconfirmed end-to-end through the real hook, and a separately-flagged "`EventSource` reconnects repeatedly" concern was investigated and closed as a false alarm — traced to the debugging session's own repeated reload cycles, not spontaneous churn. No code change.
+
+## 64. Mailpit's inbox UI and ntfy's web UI now sit behind the proxy too, closing the one gap #61 left open
+
+**Problem:** #61 put `web`/`api`/`ntfy` behind the proxy, but Mailpit's inbox UI and ntfy's own web UI still published `:8025`/`:8090` directly — a dev tool bypassing the proxy, undermining #61's "the proxy is genuinely the only front door" claim.
+
+**Decision:** Two more nginx `server` blocks, on `:8025` and `:8090`, forward to `mailpit`/`ntfy` over the compose network; both services switch from `ports:` to `expose:`. Mailpit's SMTP port (`:1025`) stays directly published — it's api's outbound mail sink, not a browser-facing UI, so there's nothing to prove by proxying it.
+
+**How it solves the problem:** Every browser-facing port on the host now flows through the one proxy; `database`'s direct `:5432` is the only remaining exception, and that's `psql` tooling, not a UI.

@@ -4,14 +4,14 @@ How the system connects end to end: container topology, data model, one real req
 
 ## Container topology
 
-`proxy` (nginx, `docs/progress-and-decisions.md` #61) is the only service publishing its app-facing port — `web` and `api` are `expose`-only, reachable exclusively through it. `database`, `mailpit`, and `ntfy` also publish their own ports directly, for dev tooling (`psql`, Mailpit UI, ntfy UI) only.
+`proxy` (nginx, `docs/progress-and-decisions.md` #61/#64) is the only service publishing app-facing ports (`:80`, `:8025`, `:8090`) — `web`, `api`, `mailpit`, and `ntfy` are all `expose`-only, reachable exclusively through it. Only `database` still publishes its own port directly, for `psql`.
 
 ```mermaid
 flowchart LR
     Browser(["Browser<br/>customer / admin"])
     DevTools(["Dev tools<br/>psql · Mailpit UI · ntfy UI"])
 
-    Proxy["proxy — nginx<br/>:80, the only published app port"]
+    Proxy["proxy — nginx<br/>:80 / :8025 / :8090 — the only published app ports"]
 
     subgraph App["application tier"]
         direction TB
@@ -22,24 +22,25 @@ flowchart LR
     subgraph Data["data & support tier"]
         direction TB
         Db[("database<br/>Postgres · :5432")]
-        Mailpit["mailpit<br/>:1025 smtp / :8025 ui"]
-        Ntfy["ntfy<br/>:80 → :8090"]
+        Mailpit["mailpit<br/>:1025 smtp (direct) / :8025 ui"]
+        Ntfy["ntfy<br/>:80 internal"]
     end
 
     Browser --> Proxy
     Proxy -->|"/"| Web
     Proxy -->|"/v1/*, /healthz, /readyz"| Api
     Proxy -.->|"/ntfy/* (SSE)"| Ntfy
+    Proxy -.->|"mailpit UI :8025"| Mailpit
+    Proxy -.->|"ntfy UI :8090"| Ntfy
 
     Web -.->|"SSR loaders, direct"| Api
 
     Api --> Db
-    Api -->|"OTP / invite email"| Mailpit
+    Api -->|"OTP / invite email, direct smtp"| Mailpit
     Api -.->|"publish, direct"| Ntfy
 
     DevTools -.- Db
-    DevTools -.- Mailpit
-    DevTools -.- Ntfy
+    DevTools -.- Proxy
 
     classDef proxy fill:#f6e9d3,stroke:#97600f,color:#4a3208,stroke-width:1.5px;
     classDef app fill:#dbe6f5,stroke:#31578f,color:#1c3252;
