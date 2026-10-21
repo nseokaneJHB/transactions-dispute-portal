@@ -64,4 +64,4 @@ These are behavioural requirements — what the system must guarantee. How each 
 - Enough users and transactions that pagination and indexing actually do something — thousands of transaction rows across dozens of users, not a dozen rows total.
 - Realistic ZAR amounts and South African merchant-style names, spread across several months.
 - A deliberate spread of dispute statuses and reasons per user, including at least one user with zero disputes and one with a long history.
-- One seeded admin account (Nolan's own email), the sole admin until an invite creates another. Seeding doesn't sidestep the email dependency — every account, seeded or not, needs a working OTP round-trip to log in (`docs/progress-and-decisions.md` #21).
+- One seeded admin account (`admin@gmail.com`), the sole admin until an invite creates another. Seeding doesn't sidestep the email dependency — every account, seeded or not, needs a working OTP round-trip to log in (`docs/progress-and-decisions.md` #21).

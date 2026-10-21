@@ -15,26 +15,78 @@ Deliberate scope choice (`docs/progress-and-decisions.md` #42). This document an
 
 ## 1. Build a real runtime image
 
-The dev `Dockerfile` installs devDependencies and runs the TypeScript source through `tsx`. A production image should be multi-stage and ship only compiled output:
+The dev `Dockerfile`s install devDependencies and run TypeScript source through `tsx`/`vite dev`. Production ships compiled output only. That buys a fail-fast `tsc` gate, a smaller attack surface, fast cold starts, and a deterministic artifact. The steps:
 
-```dockerfile
-# deps  — full workspace install (dev + prod) so the build can run
-# build — pnpm --filter @transaction-dispute-portal/api... build   (tsc -> dist/)
-# prod  — pnpm install --frozen-lockfile --prod   (no dev deps)
-# runtime — FROM node:24-alpine, USER node, NODE_ENV=production
-#   COPY --from=prod  node_modules (root + api + shared)
-#   COPY --from=build api/dist shared/dist
-#   COPY --from=build api/src/database/migrations   (static SQL, needed by the migrate runner)
-#   CMD ["node", "dist/app.js"]
+**1. Add the start scripts** (removed from the repo because nothing ran them):
+
+```jsonc
+// api/package.json
+"start": "node dist/app.js"
+// web/package.json
+"start": "node server.mjs"
 ```
 
-Notes carried over from when this existed:
+**2. Give `web` a real Node server.** `vite build` emits `dist/server/server.js` as a bare Web-standard `fetch` handler with no runtime attached. Run directly with `node`, it exits 0 silently. Wrap it with `srvx` (`pnpm --filter @transaction-dispute-portal/web add srvx`) in `web/server.mjs`:
 
-- `shared/dist` loads `zod` at module-eval time and the api runtime imports `shared`, so `shared/node_modules` must ship in the runtime stage too, not just `api/node_modules`.
-- The web SSR build externalises `react`/`react-dom` rather than bundling them, so the web runtime stage still needs `node_modules` alongside `dist/`.
-- `drizzle-kit` stays a devDependency, never ships; the runtime uses the standalone `src/database/migrate.ts` runner (`node dist/database/migrate.js`).
+```js
+import { serve } from "srvx";
+import handler from "./dist/server/server.js";
 
-Compiled artifact over `tsx` on source buys the fail-fast `tsc` gate in CI, a smaller attack surface, fast cold starts, a deterministic artifact.
+serve({ fetch: handler.fetch, port: Number(process.env.PORT ?? 3000), hostname: "0.0.0.0" });
+```
+
+Add `server.mjs` to `web/tsconfig.json`'s `include` and to `eslint.config.js`'s ignores (it's plain runtime JS).
+
+**3. Write a multi-stage `api/Dockerfile.prod`:**
+
+```dockerfile
+FROM node:24-alpine AS base
+RUN corepack enable
+WORKDIR /app
+
+FROM base AS build
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @transaction-dispute-portal/api... build
+
+FROM base AS prod-deps
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY api/package.json api/
+COPY shared/package.json shared/
+RUN pnpm install --frozen-lockfile --prod --filter @transaction-dispute-portal/api...
+
+FROM node:24-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/api/node_modules ./api/node_modules
+COPY --from=prod-deps /app/shared/node_modules ./shared/node_modules
+COPY --from=build /app/shared/package.json ./shared/
+COPY --from=build /app/shared/dist ./shared/dist
+COPY --from=build /app/api/package.json ./api/
+COPY --from=build /app/api/dist ./api/dist
+COPY --from=build /app/api/src/database/migrations ./api/src/database/migrations
+USER node
+WORKDIR /app/api
+EXPOSE 8080
+CMD ["node", "dist/app.js"]
+```
+
+`web/Dockerfile.prod` is the same shape: build with `--filter @transaction-dispute-portal/web...`, copy `web/dist`, `web/server.mjs`, `web/package.json` and the prod `node_modules`, then `CMD ["node", "server.mjs"]`.
+
+Gotchas:
+- `shared/dist` imports `zod` at load time, so `shared/node_modules` must ship too, not just `api/node_modules`.
+- The web SSR build externalises `react`/`react-dom`, so the web runtime still needs `node_modules` next to `dist/`.
+- `drizzle-kit` is a devDependency and never ships. Migrations run with the compiled runner, `node dist/database/migrate.js`, from `/app/api` (it reads `./src/database/migrations`, which is why that folder is copied).
+- `VITE_*` values are baked in at `vite build` time, so pass them as build args per environment (§3).
+
+**4. Build and smoke-test locally:**
+
+```sh
+docker build -f api/Dockerfile.prod -t dispute-api .
+docker run --rm -p 8080:8080 --env-file api/.env --network transaction-dispute-portal_default dispute-api
+curl -fsS http://localhost:8080/readyz
+```
 
 ## 2. Configuration and secrets
 
@@ -45,7 +97,7 @@ A real deployment:
 - injects every value from the orchestrator's secret store (Kubernetes `Secret`, cloud secret manager) — **no `.env` file in the image or the repo**;
 - generates fresh `BETTER_AUTH_SECRET` and `COOKIE_SECRET` (32+ bytes each) per environment;
 - sets `NODE_ENV=production`, real `API_URL` / `FRONTEND_URL` / `CORS_ORIGIN`;
-- keeps a real Gmail App Password (or SES/Postmark credentials) out of git — locally that already goes in an untracked `api/.env.local` (`docs/requirements.md`), in production it is an orchestrator secret.
+- keeps a real Gmail App Password (or SES/Postmark credentials) out of git: locally it's an uncommitted edit to `api/.env`, and in production it's an orchestrator secret.
 
 ## 3. Networking: a stable public API URL, not a raw infra address
 
@@ -137,15 +189,59 @@ Dispute-status changes publish to a per-user ntfy topic (`docs/dev-tools.md`). T
 
 ## 7. CI/CD
 
-Current CI (`.github/workflows/build.yml`): lint / typecheck / build / test, plus a `docker compose up --wait` smoke test that seeds and hits `/healthz`.
+**What exists (CI):** `.github/workflows/build.yml` runs on every push and PR. It does lint, typecheck, build, and the test suites against real Postgres + Mailpit service containers, then a `docker compose up --wait` smoke test that hits `/healthz` and `/` and seeds.
 
-To deploy, add a workflow that on `main`:
+**What to add (CD), step by step:**
 
-1. reuses the check job (`workflow_call`), then
-2. builds the multi-stage `api` / `web` images and pushes them to a registry (GHCR: `ghcr.io/<owner>/transaction-dispute-portal-{api,web}`), tagged `sha-<commit>` and `latest`;
-3. deploys — `kubectl apply` / Helm / Argo — into an environment protected by GitHub **Environments** required-reviewers (configured in repo Settings → Environments; not expressible in YAML).
+1. **Make CI reusable.** Add `workflow_call:` to `build.yml`'s `on:`, so a deploy workflow can call it and get one connected job graph.
+2. **Create GitHub Environments** (repo Settings → Environments): `staging` (no gate) and `production` (required reviewers). Put each environment's secrets there: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `COOKIE_SECRET`, `SMTP_*`, and cluster credentials. Reviewer gates can't be expressed in YAML, so this step is manual.
+3. **Add `.github/workflows/deploy.yml`:**
 
-Build tags explicitly from `github.sha` / `github.ref_name`, not `docker/metadata-action`, whose `context: git` can't introspect a detached-HEAD checkout. Keep migrations (§4) a separate manually-approved workflow, not a step here.
+```yaml
+name: Deploy
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  packages: write
+jobs:
+  checks:
+    uses: ./.github/workflows/build.yml
+  images:
+    needs: checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          IMAGE=ghcr.io/${{ github.repository }}-${{ matrix.app }}
+          docker build -f ${{ matrix.app }}/Dockerfile.prod -t $IMAGE:sha-${{ github.sha }} -t $IMAGE:latest .
+          docker push --all-tags $IMAGE
+  staging:
+    needs: images
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "kubectl set image ... :sha-${{ github.sha }}"
+  production:
+    needs: staging
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "kubectl set image ... :sha-${{ github.sha }}"
+```
+
+   Build tags explicitly from `github.sha`. Don't use `docker/metadata-action`: its `context: git` can't introspect the detached-HEAD checkout Actions uses.
+4. **Add `.github/workflows/migrate.yml`,** separate and manually triggered, because a schema change is a reviewed step, not a side effect of a deploy: `on: workflow_dispatch` with an environment input → `drizzle-kit check` → fail if the environment's `DATABASE_URL` is missing → `node dist/database/migrate.js`. Set `concurrency: { group: migrate-${{ inputs.environment }}, cancel-in-progress: false }`, so two runs never touch one database at once. Run it before the matching deploy.
+5. **Replace the `echo` deploy steps** with the real rollout for your platform (`kubectl apply`/Helm/Argo for §8, or `aws ecs update-service`).
 
 ## 8. Kubernetes
 

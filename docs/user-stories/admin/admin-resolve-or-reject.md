@@ -16,7 +16,8 @@ only for an `UNDER_REVIEW` dispute).
    {resolution}, resolution_note = {note}, resolved_by = {reviewer}, resolved_at
    = now() WHERE id = ? AND status = 'UNDER_REVIEW'` — plus a
    `dispute_audit_log` row (`UNDER_REVIEW → {resolution}`, the note).
-4. **`publishDisputeUpdate(ownerId, {resolution})`** — ntfy, same mechanism as
+4. **`publishDisputeUpdate(ownerId, { dispute_id, status: resolution })`** —
+   ntfy, same mechanism as
    `docs/user-stories/admin/admin-move-to-review.md`.
 5. Response `200`. Web refreshes the review queue and closes the modal.
 

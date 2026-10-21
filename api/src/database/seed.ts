@@ -39,9 +39,9 @@ type DisputeReason = (typeof DISPUTE_REASON)[keyof typeof DISPUTE_REASON];
 
 const FAKER_SEED = 20260830;
 
-const ADMIN = { name: "Nolan Seokane", email: "thelowlydev@gmail.com" };
-const DEMO_CUSTOMER_EMAIL = "customer@example.com";
-const NEWCOMER_EMAIL = "newcomer@example.com";
+const ADMIN = { name: "Admin", email: "admin@gmail.com" };
+const CUSTOMER = { name: "Customer", email: "customer@gmail.com" };
+const NEWCOMER = { name: "Newcomer", email: "newcomer@gmail.com" };
 
 const KNOWN_DEVICE_USER_AGENT =
 	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -182,14 +182,14 @@ const seed = async (): Promise<void> => {
 				role: USER_ROLE.ADMIN,
 			},
 			{
-				name: "Demo Customer",
-				email: DEMO_CUSTOMER_EMAIL,
+				name: CUSTOMER.name,
+				email: CUSTOMER.email,
 				email_verified: true,
 				role: USER_ROLE.CUSTOMER,
 			},
 			{
-				name: "New Customer",
-				email: NEWCOMER_EMAIL,
+				name: NEWCOMER.name,
+				email: NEWCOMER.email,
 				email_verified: true,
 				role: USER_ROLE.CUSTOMER,
 			},
@@ -211,8 +211,8 @@ const seed = async (): Promise<void> => {
 		const users = await database.insert(UserModel).values(userRows).returning();
 
 		const admin = users.find(({ email }) => email === ADMIN.email)!;
-		const demo = users.find(({ email }) => email === DEMO_CUSTOMER_EMAIL)!;
-		const newcomer = users.find(({ email }) => email === NEWCOMER_EMAIL)!;
+		const demo = users.find(({ email }) => email === CUSTOMER.email)!;
+		const newcomer = users.find(({ email }) => email === NEWCOMER.email)!;
 		const regulars = users.filter(
 			({ id, role }) =>
 				role === USER_ROLE.CUSTOMER && id !== demo.id && id !== newcomer.id,
@@ -253,10 +253,7 @@ const seed = async (): Promise<void> => {
 		const transactions: TransactionModelSelect[] = [];
 		for (const batch of chunk(transactionRows, INSERT_CHUNK)) {
 			transactions.push(
-				...(await database
-					.insert(TransactionModel)
-					.values(batch)
-					.returning()),
+				...(await database.insert(TransactionModel).values(batch).returning()),
 			);
 		}
 
@@ -280,8 +277,7 @@ const seed = async (): Promise<void> => {
 			const isAdminClosed =
 				status === DISPUTE_STATUS.RESOLVED ||
 				status === DISPUTE_STATUS.REJECTED;
-			const isClosed =
-				isAdminClosed || status === DISPUTE_STATUS.WITHDRAWN;
+			const isClosed = isAdminClosed || status === DISPUTE_STATUS.WITHDRAWN;
 			const resolvedAt = isClosed
 				? faker.date.between({ from: createdAt, to: now })
 				: null;
@@ -297,9 +293,7 @@ const seed = async (): Promise<void> => {
 				user_id: transaction.user_id,
 				transaction_id: transaction.id,
 				description: describeDispute(reason, transaction.merchant_name),
-				resolution_note: isAdminClosed
-					? pick(RESOLUTION_NOTES[status])
-					: null,
+				resolution_note: isAdminClosed ? pick(RESOLUTION_NOTES[status]) : null,
 				resolved_at: resolvedAt,
 				resolved_by: isAdminClosed ? admin.id : null,
 				created_at: createdAt,
@@ -403,8 +397,8 @@ const seed = async (): Promise<void> => {
 				`  dispute audit rows: ${auditRows.length}`,
 				"",
 				`  admin login:    ${ADMIN.email}`,
-				`  customer login: ${DEMO_CUSTOMER_EMAIL} (long history)`,
-				`  customer login: ${NEWCOMER_EMAIL} (no disputes)`,
+				`  customer login: ${CUSTOMER.email} (long history)`,
+				`  customer login: ${NEWCOMER.email} (no disputes)`,
 			].join("\n"),
 		);
 	} finally {

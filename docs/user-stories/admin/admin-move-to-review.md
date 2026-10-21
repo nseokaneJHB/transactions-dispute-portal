@@ -14,8 +14,8 @@ only for a `SUBMITTED` dispute).
    = 'UNDER_REVIEW' WHERE id = ? AND status = 'SUBMITTED'`
    (`docs/progress-and-decisions.md` #41) — plus a `dispute_audit_log` row
    (`SUBMITTED → UNDER_REVIEW`, actor = reviewer).
-4. **`publishDisputeUpdate(ownerId, 'UNDER_REVIEW')`** — fire-and-forget ntfy
-   POST to the owner's topic (2s timeout, failures logged not thrown). This is
+4. **`publishDisputeUpdate(ownerId, { dispute_id, status: 'UNDER_REVIEW' })`**
+   — fire-and-forget ntfy POST to the owner's topic (2s timeout, failures logged not thrown). This is
    what surfaces the customer's toast in
    `docs/user-stories/client/live-dispute-notifications.md`.
 5. Response `200` with the dispute (transaction + customer merged in from the

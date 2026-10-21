@@ -3,7 +3,10 @@ import type { ComponentType, ReactNode } from "react";
 import type { OrderDirection } from "@transaction-dispute-portal/shared";
 
 import { EmptyState } from "@/components/custom/empty-state";
-import { ListControls, type ListFilters } from "@/components/custom/list-controls";
+import {
+	ListControls,
+	type ListFilters,
+} from "@/components/custom/list-controls";
 import { Pagination } from "@/components/custom/pagination";
 import { SortableHeader } from "@/components/custom/sortable-header";
 import {
@@ -28,6 +31,8 @@ export interface ListSearch<
 	from?: string;
 	to?: string;
 	status?: TStatus;
+	min_amount_cents?: number;
+	max_amount_cents?: number;
 	sort?: TSort;
 	order?: OrderDirection;
 }
@@ -56,6 +61,8 @@ interface DataListProps<
 	searchPlaceholder: string;
 	/** When given, `ListControls` renders a status `<select>` with these values. */
 	statusOptions?: readonly TStatus[];
+	/** When set, the filters modal renders the amount range slider. */
+	showAmountRange?: boolean;
 	emptyState: {
 		title: string;
 		description?: string;
@@ -81,6 +88,7 @@ export const DataList = <
 	columns,
 	searchPlaceholder,
 	statusOptions,
+	showAmountRange,
 	emptyState,
 }: DataListProps<TRow, TStatus, TSort>) => {
 	const { data, page, limit, count } = result;
@@ -97,6 +105,7 @@ export const DataList = <
 				values={search}
 				searchPlaceholder={searchPlaceholder}
 				statusOptions={statusOptions}
+				showAmountRange={showAmountRange}
 				clearable={hasActiveFilters(search)}
 				onApply={applyFilters}
 				onClear={() => onSearchChange({ ...search, ...CLEARED_FILTERS })}

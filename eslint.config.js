@@ -12,8 +12,6 @@ export default ts.config(
 			"**/.turbo/**",
 			"**/.tanstack/**",
 			"**/node_modules/**",
-			// plain runtime .mjs entry, not part of any tsconfig program
-			"web/server.mjs",
 		],
 	},
 	{

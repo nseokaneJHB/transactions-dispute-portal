@@ -19,8 +19,7 @@ import { stringToTitleCase } from "../util.js";
 z.config({
 	customError: (issue) => {
 		const path = issue.path ?? [];
-		const fieldName =
-			path.length > 0 ? String(path[path.length - 1]) : "Field";
+		const fieldName = path.length > 0 ? String(path[path.length - 1]) : "Field";
 
 		if (issue.code === "invalid_type") {
 			return `${stringToTitleCase(fieldName)} is required.`;
@@ -97,6 +96,21 @@ export const toDateQuerySchema = z.iso
 	.optional()
 	.describe("Latest date in range, inclusive (YYYY-MM-DD)");
 
+/** `?min_amount_cents=` / `?max_amount_cents=` on a list query — an inclusive amount bound in ZAR cents. */
+export const minAmountQuerySchema = z.coerce
+	.number()
+	.int()
+	.nonnegative()
+	.optional()
+	.describe("Smallest amount in range, inclusive (ZAR cents)");
+
+export const maxAmountQuerySchema = z.coerce
+	.number()
+	.int()
+	.nonnegative()
+	.optional()
+	.describe("Largest amount in range, inclusive (ZAR cents)");
+
 export const httpCodeSchema = z
 	.enum(HTTP_CODE)
 	.describe("Standardized response code");
@@ -117,7 +131,9 @@ export const disputeReasonSchema = z
 
 export const disputeResolutionSchema = z
 	.enum(ADMIN_RESOLUTION_STATUS)
-	.describe("The reviewer's decision — the terminal status to move the dispute to");
+	.describe(
+		"The reviewer's decision — the terminal status to move the dispute to",
+	);
 
 export const adminInviteStatusSchema = z
 	.enum(ADMIN_INVITE_STATUS)

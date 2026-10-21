@@ -11,7 +11,10 @@ import {
 } from "drizzle-orm";
 import { fromZonedTime } from "date-fns-tz";
 
-import { BUSINESS_TIMEZONE, ORDER_DIRECTION } from "@transaction-dispute-portal/shared";
+import {
+	BUSINESS_TIMEZONE,
+	ORDER_DIRECTION,
+} from "@transaction-dispute-portal/shared";
 import type { OrderDirection } from "@transaction-dispute-portal/shared";
 
 /** `from`/`to` are `YYYY-MM-DD` calendar dates in `BUSINESS_TIMEZONE`; these convert a day's boundaries to the UTC instants the timestamp columns are compared against. */
@@ -62,6 +65,17 @@ export const withinDays = (
 	and(
 		from ? gte(column, startOfBusinessDay(from)) : undefined,
 		to ? lte(column, endOfBusinessDay(to)) : undefined,
+	);
+
+/** An inclusive `[min, max]` predicate over an amount column (ZAR cents); `undefined` when neither bound is set. */
+export const withinAmount = (
+	column: Column,
+	min: number | undefined,
+	max: number | undefined,
+): SQL | undefined =>
+	and(
+		min !== undefined ? gte(column, min) : undefined,
+		max !== undefined ? lte(column, max) : undefined,
 	);
 
 /** The Drizzle order helper for the requested direction — descending when unset. */

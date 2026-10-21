@@ -57,7 +57,7 @@ Whenever Better Auth inserts a `session` row, its
 - Otherwise → `buildNewDeviceLoginEmail` (IP, user-agent, timestamp, a sign-in
   link) → `sendEmail`.
 
-The seed gives the admin and `customer@example.com` one session on a known
+The seed gives the admin and `customer@gmail.com` one session on a known
 user-agent so this stays quiet on a demo login from the same browser.
 
 ## Route access (applies to every authenticated flow)

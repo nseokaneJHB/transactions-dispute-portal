@@ -19,7 +19,7 @@ Auth is Better Auth email-OTP (`docs/progress-and-decisions.md` #21 — see `doc
 ### How it's wired
 
 - `compose.yml` has an `ntfy` service (`binwiederhier/ntfy`), alongside Postgres/api/web/Mailpit. Web UI on `http://localhost:8090`; the api reaches it at `http://ntfy` (`env.NTFY_URL`). The browser's SSE subscription (`use-dispute-notifications.ts`) connects to `http://localhost:8090` directly (`VITE_NTFY_URL`).
-- On a dispute status change (the `POST /v1/admin/disputes/:id/review` **and** `.../resolve` handlers — see `docs/backend-service.md`), `lib/notifier.ts`'s `publishDisputeUpdate` does a fire-and-forget `POST ${NTFY_URL}/dispute-updates-{userId}` with the new status (`UNDER_REVIEW` / `RESOLVED` / `REJECTED`) as the body. Failures are logged, never block or fail the request.
+- On a dispute status change (the `POST /v1/admin/disputes/:id/review` **and** `.../resolve` handlers — see `docs/backend-service.md`), `lib/notifier.ts`'s `publishDisputeUpdate` does a fire-and-forget `POST ${NTFY_URL}/dispute-updates-{userId}` with a JSON body `{ dispute_id, status }` (`shared`'s `disputeNotificationSchema`; status is `UNDER_REVIEW` / `RESOLVED` / `REJECTED`). Only the opaque id goes on the stream, never the merchant or amount, because ntfy topics are unauthenticated (`docs/progress-and-decisions.md` #66). Failures are logged, never block or fail the request.
 - Per-user topics, not one shared topic, so one customer's dispute activity isn't visible to another — the same authz principle as everything else in `docs/requirements.md`, applied to the notification channel too.
 - Local dev: subscribe via `curl -s http://localhost:8090/dispute-updates-{userId}/json` or the ntfy web UI to watch events arrive while testing the dispute flow.
 

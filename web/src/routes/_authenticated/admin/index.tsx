@@ -41,8 +41,9 @@ const ReviewQueuePage = () => {
 				result={list}
 				search={search}
 				onSearchChange={(next) => navigate({ search: next })}
-				searchPlaceholder="Customer, merchant or description"
+				searchPlaceholder="Customer, merchant or words in the dispute"
 				statusOptions={Object.values(DISPUTE_STATUS)}
+				showAmountRange
 				emptyState={{ title: "Nothing matches" }}
 				columns={[
 					{

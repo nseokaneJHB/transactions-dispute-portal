@@ -120,7 +120,10 @@ export const startDisputeReview = async (
 	});
 
 	if (reviewed) {
-		await publishDisputeUpdate(reviewed.user_id, reviewed.status);
+		await publishDisputeUpdate(reviewed.user_id, {
+			dispute_id: reviewed.id,
+			status: reviewed.status,
+		});
 
 		const { status, code } = HTTP_RESPONSE_CODE.OK;
 		return reply.status(status).send({
@@ -171,7 +174,8 @@ export const resolveDisputeForReview = async (
 		const { status, code } = HTTP_RESPONSE_CODE.CONFLICT;
 		return reply.status(status).send({
 			code,
-			message: "This dispute must be moved to review before it can be resolved.",
+			message:
+				"This dispute must be moved to review before it can be resolved.",
 		});
 	}
 
@@ -213,7 +217,10 @@ export const resolveDisputeForReview = async (
 			.send({ code, message: "This dispute is already closed." });
 	}
 
-	await publishDisputeUpdate(resolved.user_id, resolved.status);
+	await publishDisputeUpdate(resolved.user_id, {
+		dispute_id: resolved.id,
+		status: resolved.status,
+	});
 
 	const { status, code } = HTTP_RESPONSE_CODE.OK;
 	return reply.status(status).send({

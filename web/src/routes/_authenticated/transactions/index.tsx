@@ -30,6 +30,7 @@ const TransactionsPage = () => {
 				search={search}
 				onSearchChange={(next) => navigate({ search: next })}
 				searchPlaceholder="Merchant name"
+				showAmountRange
 				emptyState={{
 					title: "No transactions match",
 					description: "Try widening the date range or clearing the filters.",

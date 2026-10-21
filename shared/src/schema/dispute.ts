@@ -10,8 +10,11 @@ import {
 	uuidSchema,
 } from "./field.js";
 import {
+	amountRangeQueryShape,
 	globalResponseSchema,
+	isOrderedAmountRange,
 	isOrderedDateRange,
+	ORDERED_AMOUNT_RANGE_ISSUE,
 	ORDERED_DATE_RANGE_ISSUE,
 	paginatedGlobalResponseSchema,
 	paginationQuerySchema,
@@ -34,13 +37,14 @@ export const disputeCreateBodySchema = z.object({
 
 /**
  * Shared filters for `GET /v1/disputes` and `GET /v1/admin/disputes` — status,
- * transaction, and (from `paginationQuerySchema`) `search` / `from` / `to` /
- * pagination. `search` matches the dispute description and the disputed
+ * transaction, the disputed transaction's amount, and (from
+ * `paginationQuerySchema`) `search` / `from` / `to` / pagination. `search` matches the dispute description and the disputed
  * merchant, plus — on the admin route only — the customer's name and email.
  * The two routes differ only in their `sort` whitelist, so `sort` is added per
  * route below.
  */
 const disputesQueryBase = paginationQuerySchema.extend({
+	...amountRangeQueryShape,
 	status: disputeStatusSchema
 		.optional()
 		.describe("Only disputes currently in this status"),
@@ -57,7 +61,8 @@ export const disputesQuerySchema = disputesQueryBase
 			.optional()
 			.describe("Column to sort the page by — defaults to `created_at`"),
 	})
-	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE);
+	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE)
+	.refine(isOrderedAmountRange, ORDERED_AMOUNT_RANGE_ISSUE);
 
 /**
  * Query for `GET /v1/admin/disputes` — the review queue. Same filters as
@@ -72,7 +77,8 @@ export const adminDisputesQuerySchema = disputesQueryBase
 			.optional()
 			.describe("Column to sort the page by — defaults to `created_at`"),
 	})
-	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE);
+	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE)
+	.refine(isOrderedAmountRange, ORDERED_AMOUNT_RANGE_ISSUE);
 
 /**
  * The disputed transaction's own details, carried on every dispute response so
@@ -80,7 +86,9 @@ export const adminDisputesQuerySchema = disputesQueryBase
  * second lookup by `transaction_id`.
  */
 export const disputeTransactionSchema = z.object({
-	merchant_name: stringSchema.describe("Merchant the disputed payment was made to"),
+	merchant_name: stringSchema.describe(
+		"Merchant the disputed payment was made to",
+	),
 	amount_cents: integerSchema.describe("Amount in ZAR cents"),
 	transacted_at: stringSchema.describe("When the payment happened (ISO 8601)"),
 });
@@ -147,7 +155,9 @@ export const disputeResolveBodySchema = z.object({
 	note: stringSchema
 		.min(1, "A resolution note is required.")
 		.max(2000, "Keep the note under 2000 characters.")
-		.describe("The reviewer's explanation, recorded on the dispute and its audit log"),
+		.describe(
+			"The reviewer's explanation, recorded on the dispute and its audit log",
+		),
 });
 
 /** Response for `POST /v1/admin/disputes/:disputeId/resolve`. */
@@ -156,9 +166,10 @@ export const adminDisputeResponseSchema = globalResponseSchema.extend({
 });
 
 /** Response for `GET /v1/admin/disputes` — one page of disputes for review. */
-export const adminDisputeListResponseSchema = paginatedGlobalResponseSchema.extend({
-	data: z.array(adminDisputeSchema),
-});
+export const adminDisputeListResponseSchema =
+	paginatedGlobalResponseSchema.extend({
+		data: z.array(adminDisputeSchema),
+	});
 
 /**
  * A live count of every dispute in each lifecycle status — unfiltered, the
@@ -172,4 +183,15 @@ export const disputeStatusCountsSchema = z
 /** Response for `GET /v1/admin/disputes/summary`. */
 export const adminDisputeSummaryResponseSchema = globalResponseSchema.extend({
 	data: disputeStatusCountsSchema,
+});
+
+/**
+ * The message published on a customer's ntfy topic when one of their disputes
+ * changes status. Deliberately only an opaque id and the status: ntfy topics
+ * are unauthenticated, so the client fetches merchant/amount through the
+ * session-scoped API instead of reading them off the stream.
+ */
+export const disputeNotificationSchema = z.object({
+	dispute_id: uuidSchema,
+	status: disputeStatusSchema,
 });

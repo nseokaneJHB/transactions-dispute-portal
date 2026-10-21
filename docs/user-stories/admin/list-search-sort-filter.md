@@ -11,6 +11,7 @@ its own two list endpoints — see
 | `page`, `limit` | 1-based page + size (default 1 / 10, `limit` capped at 100). Always present in the URL. |
 | `search` | case-insensitive substring across that list's text columns; `%` / `_` / `\` the user types are matched literally. Omitted from the URL unless set. |
 | `from`, `to` | inclusive `YYYY-MM-DD` bounds on the list's date column (`from` snaps to start-of-day, `to` to end-of-day). |
+| `min_amount_cents`, `max_amount_cents` | inclusive bounds on the transaction amount in ZAR cents (for disputes, the disputed transaction's); non-negative integers, `min ≤ max` or `422`. The UI sets them with a two-thumb Rand slider in the Filters modal (R0 to R25,000; a thumb at either end leaves that side unbounded).  Review queue only; invites have no amount. |
 | `sort` | a **whitelisted** column name (`ADMIN_DISPUTE_SORT` / `ADMIN_INVITE_SORT`). |
 | `order` | `asc` / `desc`; defaults to `desc`. Omitted from the URL unless set. |
 
@@ -21,9 +22,9 @@ on top of the customer-facing dispute sort columns, since a reviewer benefits
 from grouping one person's disputes together. On the web side, `sort` /
 `order` are driven by **clicking a column header** (`SortableHeader`) — a
 3-state cycle: 1st click desc, 2nd asc, 3rd clears — not a dropdown.
-`ListControls` is the search/date/status bar and applies on submit. URL key
+`ListControls` is a search box plus a **Filters** modal (status pills, date range, amount slider) and applies on submit. URL key
 order is fixed by a custom `stringifySearch` in `router.tsx`:
-`page, limit, search, status, …, from, to, sort, order`.
+`page, limit, search, status, …, from, to, min_amount_cents, max_amount_cents, sort, order`.
 
 The review queue additionally has a **default order without an explicit
 `sort`**: `ORDER BY status ASC, created_at ASC, id DESC`, floating the open
@@ -65,3 +66,11 @@ envelope.
 side drives `sort` by clicking a known column header (`SortableHeader`), never
 free text. A hand-crafted request or a manipulated URL shows the validation
 error instead of a sorted list.
+
+### Invalid amount range
+
+**Trigger:** `min_amount_cents` greater than `max_amount_cents`, or either one negative or not a whole number (e.g. `?min_amount_cents=20000&max_amount_cents=10000`). Checked by the query schema's `.refine(isOrderedAmountRange)` and the integer/non-negative field schemas, before any SQL runs.
+
+**Response:** `422` with `errors: [{ field: "min_amount_cents", … }]`.
+
+**What the user sees / does next:** the route's `validateSearch` runs the same schema, so a reversed range entered in the UI is caught client-side before any request goes out, the same as an invalid date range. A hand-crafted API request gets the `422`.

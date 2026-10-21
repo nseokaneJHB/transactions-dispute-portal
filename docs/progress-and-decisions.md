@@ -2,7 +2,7 @@
 
 ## Progress
 
-Feature-complete. The Fastify API covers auth (email-OTP sign-in, session endpoint, two-step email change), transactions, disputes (submit/list/detail/withdraw), the admin review → resolve flow, and invite-only admin accounts. It's backed by a 65-test Vitest integration suite that runs in CI against real Postgres + Mailpit. `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy (8 unit tests). Every flow has been walked by hand in a browser as both roles.
+Feature-complete. The Fastify API covers auth (email-OTP sign-in, session endpoint, two-step email change), transactions, disputes (submit/list/detail/withdraw), the admin review → resolve flow, and invite-only admin accounts. It's backed by a 71-test Vitest integration suite that runs in CI against real Postgres + Mailpit. `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy (12 unit tests). Every flow has been walked by hand in a browser as both roles.
 
 ### Definition of done
 
@@ -176,7 +176,7 @@ Loaders read through `ensureQueryData`, which only checks for `data === undefine
 
 ## 57. One shared list query across every list endpoint
 
-`shared`'s `paginationQuerySchema` (`page`, `limit ≤ 100`, `search`, `from`/`to`, `order`) is extended per endpoint with a **whitelisted** `sort` enum, so an unlisted value is a `422`, never an interpolated column. Column binding lives in each repository. Small helpers (`containsText`, `withinDays`, `sortDirection`) cover the repeated logic. On the web, `<DataList>` (controls + sortable table + pagination) is shared by all four list pages. A generic `buildListQuery()` DSL was rejected because the four queries differ too much in joins and scoping.
+`shared`'s `paginationQuerySchema` (`page`, `limit ≤ 100`, `search`, `from`/`to`, `order`) is extended per endpoint with its own filters (transactions and both dispute lists add an inclusive `min_amount_cents`/`max_amount_cents` range, `min ≤ max` or `422`) and a **whitelisted** `sort` enum, so an unlisted value is a `422`, never an interpolated column. Column binding lives in each repository. Small helpers (`containsText`, `withinDays`, `withinAmount`, `sortDirection`) cover the repeated logic. On the web, `<DataList>` (controls + sortable table + pagination) is shared by all four list pages. A generic `buildListQuery()` DSL was rejected because the four queries differ too much in joins and scoping.
 
 ## 58. Review queue: unresolved disputes first by default, stat cards from their own endpoint
 
@@ -191,3 +191,9 @@ With no explicit `sort`, the queue orders `status ASC, created_at ASC`. The enum
 **Problem:** An nginx proxy fronted `web`/`api`/`ntfy`/Mailpit under a custom `/etc/hosts` name, to mirror the "one stable client-facing domain" production pattern. It cost a `sudo` hosts-file edit on every machine, its own DNS-caching and path-rewrite config, and a sixth container. None of that is product behaviour.
 
 **Decision:** Removed. Each service publishes its own `localhost` port (web `:3000`, api `:8080`, Mailpit `:8025`, ntfy `:8090`), and cookies work because `localhost` is same-site across ports. The production pattern (an Ingress/load balancer in front of a stable domain) is still documented in `docs/production-runbook.md` §3, where it's actually needed.
+
+## 66. Status notifications carry the dispute id, not its details
+
+**Problem:** The ntfy message body was just the new status, so the toast said "one of your disputes is now Under review" and the customer had to filter the list to find which one.
+
+**Decision:** The api publishes `{ dispute_id, status }` (`shared`'s `disputeNotificationSchema`). The browser refreshes that dispute's queries, fetches it through the session-scoped API to name the merchant and amount, and the toast's **View** action opens it. Putting the merchant and amount on the message itself was rejected: ntfy topics are unauthenticated, so anyone who learns a topic name could read them. A random id reveals nothing, and the details stay behind the session cookie. The cost is one extra `GET` per notification.

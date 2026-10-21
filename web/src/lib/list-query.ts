@@ -21,7 +21,16 @@ export const nextSort = <TColumn extends string>(
 };
 
 /** The optional search-param keys a "Clear" wipes and `hasActiveFilters` checks. */
-const FILTER_KEYS = ["search", "from", "to", "status", "sort", "order"] as const;
+const FILTER_KEYS = [
+	"search",
+	"from",
+	"to",
+	"status",
+	"min_amount_cents",
+	"max_amount_cents",
+	"sort",
+	"order",
+] as const;
 
 /**
  * The search-param patch that resets every optional list filter — spread into a
@@ -34,6 +43,8 @@ export const CLEARED_FILTERS = {
 	from: undefined,
 	to: undefined,
 	status: undefined,
+	min_amount_cents: undefined,
+	max_amount_cents: undefined,
 	sort: undefined,
 	order: undefined,
 } as const;
@@ -46,3 +57,25 @@ export const hasActiveFilters = (
 		const value = search[key];
 		return value !== undefined && value !== "";
 	});
+
+/** The amount slider's top end and step, in ZAR cents. The top end means "no upper limit". */
+export const AMOUNT_SLIDER_MAX_CENTS = 2_500_000;
+export const AMOUNT_SLIDER_STEP_CENTS = 5_000;
+
+/** The `[min, max]` slider position for the current amount bounds — unset bounds sit at the ends. */
+export const amountBoundsToSlider = (
+	min: number | undefined,
+	max: number | undefined,
+): [number, number] => [
+	Math.min(min ?? 0, AMOUNT_SLIDER_MAX_CENTS),
+	Math.min(max ?? AMOUNT_SLIDER_MAX_CENTS, AMOUNT_SLIDER_MAX_CENTS),
+];
+
+/** The amount bounds a slider position sends — a thumb at its end means that side is unbounded. */
+export const sliderToAmountBounds = ([min, max]: [number, number]): {
+	min_amount_cents: number | undefined;
+	max_amount_cents: number | undefined;
+} => ({
+	min_amount_cents: min > 0 ? min : undefined,
+	max_amount_cents: max < AMOUNT_SLIDER_MAX_CENTS ? max : undefined,
+});

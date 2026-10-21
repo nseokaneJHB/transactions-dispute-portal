@@ -8,6 +8,8 @@ import {
 	httpCodeSchema,
 	fromDateQuerySchema,
 	limitQuerySchema,
+	maxAmountQuerySchema,
+	minAmountQuerySchema,
 	orderDirectionSchema,
 	pageQuerySchema,
 	searchQuerySchema,
@@ -47,6 +49,30 @@ export const isOrderedDateRange = (query: {
 export const ORDERED_DATE_RANGE_ISSUE = {
 	path: ["from"],
 	message: "`from` must be on or before `to`",
+};
+
+/**
+ * The amount-range filter for lists whose rows carry a transaction amount
+ * (transactions and disputes, not invites). Spread into a list query's
+ * `.extend()`.
+ */
+export const amountRangeQueryShape = {
+	min_amount_cents: minAmountQuerySchema,
+	max_amount_cents: maxAmountQuerySchema,
+};
+
+/** `min_amount_cents` must not exceed `max_amount_cents` — refined last, like the date range. */
+export const isOrderedAmountRange = (query: {
+	min_amount_cents?: number;
+	max_amount_cents?: number;
+}): boolean =>
+	query.min_amount_cents === undefined ||
+	query.max_amount_cents === undefined ||
+	query.min_amount_cents <= query.max_amount_cents;
+
+export const ORDERED_AMOUNT_RANGE_ISSUE = {
+	path: ["min_amount_cents"],
+	message: "`min_amount_cents` must be at most `max_amount_cents`",
 };
 
 /**

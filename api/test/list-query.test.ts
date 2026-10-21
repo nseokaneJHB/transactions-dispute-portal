@@ -6,7 +6,8 @@ import { signIn, type Session } from "./helpers/auth.js";
 import { resetDatabase, type SeededData } from "./helpers/fixtures.js";
 
 /**
- * The shared list-query surface — `?search=`, `?from=` / `?to=`, `?sort=` /
+ * The shared list-query surface — `?search=`, `?from=` / `?to=`,
+ * `?min_amount_cents=` / `?max_amount_cents=`, `?sort=` /
  * `?order=` — exercised across the customer and admin list endpoints that all
  * extend `paginationQuerySchema`.
  *
@@ -107,6 +108,48 @@ describe("list query: search, date range, sort", () => {
 			);
 			expect(response.statusCode).toBe(422);
 		});
+
+		it("bounds an inclusive amount range on amount_cents", async () => {
+			const response = await get(
+				"/v1/transactions?min_amount_cents=11000&max_amount_cents=12000&sort=amount_cents&order=asc",
+				alice,
+			);
+
+			expect(response.statusCode).toBe(200);
+			const amounts = response
+				.json()
+				.data.map((row: { amount_cents: number }) => row.amount_cents);
+			expect(amounts).toEqual([11000, 12000]);
+		});
+
+		it("accepts a one-sided amount bound", async () => {
+			const response = await get(
+				"/v1/transactions?min_amount_cents=12500",
+				alice,
+			);
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json().count).toBe(1);
+		});
+
+		it("422s a reversed amount range", async () => {
+			const response = await get(
+				"/v1/transactions?min_amount_cents=20000&max_amount_cents=10000",
+				alice,
+			);
+			expect(response.statusCode).toBe(422);
+		});
+
+		it("422s a negative or non-integer amount", async () => {
+			const negative = await get("/v1/transactions?min_amount_cents=-1", alice);
+			const fractional = await get(
+				"/v1/transactions?max_amount_cents=10.5",
+				alice,
+			);
+
+			expect(negative.statusCode).toBe(422);
+			expect(fractional.statusCode).toBe(422);
+		});
 	});
 
 	describe("GET /v1/disputes", () => {
@@ -131,6 +174,17 @@ describe("list query: search, date range, sort", () => {
 			expect(response.json().data).toHaveLength(0);
 		});
 
+		it("bounds the disputed transaction's amount", async () => {
+			const inRange = await get("/v1/disputes?max_amount_cents=10000", alice);
+			const outOfRange = await get(
+				"/v1/disputes?min_amount_cents=10001",
+				alice,
+			);
+
+			expect(inRange.json().data).toHaveLength(1);
+			expect(outOfRange.json().data).toHaveLength(0);
+		});
+
 		it("accepts ?sort=status — disputes order by the lifecycle enum", async () => {
 			const response = await get("/v1/disputes?sort=status&order=asc", alice);
 			expect(response.statusCode).toBe(200);
@@ -148,7 +202,9 @@ describe("list query: search, date range, sort", () => {
 			expect(
 				response
 					.json()
-					.data.every((row: { user_id: string }) => row.user_id === data.alice.id),
+					.data.every(
+						(row: { user_id: string }) => row.user_id === data.alice.id,
+					),
 			).toBe(true);
 			expect(response.json().data.length).toBeGreaterThan(0);
 		});
@@ -158,6 +214,21 @@ describe("list query: search, date range, sort", () => {
 
 			expect(response.statusCode).toBe(200);
 			expect(response.json().data.length).toBeGreaterThan(0);
+		});
+
+		it("bounds the review queue by the disputed transaction's amount", async () => {
+			const inRange = await get(
+				"/v1/admin/disputes?min_amount_cents=10000&max_amount_cents=10000",
+				admin,
+			);
+			const outOfRange = await get(
+				"/v1/admin/disputes?min_amount_cents=50000",
+				admin,
+			);
+
+			expect(inRange.statusCode).toBe(200);
+			expect(inRange.json().data).toHaveLength(1);
+			expect(outOfRange.json().data).toHaveLength(0);
 		});
 
 		it("accepts ?sort=customer on the review queue", async () => {
@@ -245,10 +316,7 @@ describe("list query: search, date range, sort", () => {
 		});
 
 		it("filters invites by an email substring", async () => {
-			const response = await get(
-				"/v1/admin/invites?search=zzz-late",
-				admin,
-			);
+			const response = await get("/v1/admin/invites?search=zzz-late", admin);
 
 			expect(response.statusCode).toBe(200);
 			expect(

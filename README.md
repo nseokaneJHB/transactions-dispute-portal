@@ -6,15 +6,17 @@ A customer-facing portal where bank customers view their transactions, dispute a
 
 ## Run it
 
-**Prerequisite:** Docker (with Compose v2). Nothing else is needed to run the app.
+**Prerequisites:** Docker (with Compose v2), Node 24 (`.nvmrc`) and pnpm. Node 24 ships pnpm via corepack: run `corepack enable` once. With nvm, run `nvm use` in the repo first, because globally installed tools are per Node version.
 
 ```sh
 git clone <repo-url> transaction-dispute-portal
 cd transaction-dispute-portal
 
-docker compose up -d --wait           # first run builds images; takes a few minutes
-docker compose exec api pnpm db:seed  # load demo data (re-run any time to reset it)
+pnpm docker:up   # first run builds images; takes a few minutes
+pnpm db:seed     # load demo data (re-run any time to reset it)
 ```
+
+Docker only, without Node/pnpm on the host: `docker compose up -d --build --wait`, then `docker compose exec api pnpm db:seed`.
 
 The committed `api/.env` and `web/.env` hold working local values (fake secrets, nothing real), so there's no setup step. Migrations run automatically when `api` starts.
 
@@ -26,7 +28,7 @@ The committed `api/.env` and `web/.env` hold working local values (fake secrets,
 | API | http://localhost:8080 | The REST API, e.g. http://localhost:8080/healthz |
 | Postgres | `localhost:5432` | `postgres` / `password`, database `transaction-dispute` |
 
-Stop with `docker compose down`. Add `-v` to also wipe the database and `node_modules` volumes.
+Stop with `pnpm docker:down`. `pnpm docker:reset` also wipes the containers' volumes (database, `node_modules`) and the built images.
 
 ## Signing in
 
@@ -34,14 +36,14 @@ There are no passwords. Enter an account's email, open Mailpit (http://localhost
 
 | Account | Role | Use it for |
 | --- | --- | --- |
-| `customer@example.com` | Customer | Long transaction + dispute history |
-| `newcomer@example.com` | Customer | Clean slate, no disputes |
-| `thelowlydev@gmail.com` | Admin | Review queue, resolving disputes, sending admin invites |
+| `customer@gmail.com` | Customer | Long transaction + dispute history |
+| `newcomer@gmail.com` | Customer | Clean slate, no disputes |
+| `admin@gmail.com` | Admin | Review queue, resolving disputes, sending admin invites |
 
 ## Demo script (~5 min)
 
-1. **Customer:** sign in as `customer@example.com` → **Transactions** → search/sort/filter → open one → **Dispute this transaction**.
-2. In a second browser (or private window), sign in as `thelowlydev@gmail.com` → **Review queue** puts open disputes first → **Review** on the new one → **Move to review**. The customer's tab gets a live toast (via ntfy).
+1. **Customer:** sign in as `customer@gmail.com` → **Transactions** → search/sort/filter → open one → **Dispute this transaction**.
+2. In a second browser (or private window), sign in as `admin@gmail.com` → **Review queue** puts open disputes first → **Review** on the new one → **Move to review**. The customer's tab gets a live toast (via ntfy).
 3. Admin → **Review** again → pick a **Decision** (resolved/rejected) + **Note to the customer** → **Submit decision**. The customer sees the status and note under **Disputes**.
 4. Customer → open another dispute → **Withdraw dispute**.
 5. Admin → **Invitations** → **Send an invite** → the invite link lands in Mailpit → accept it → sign in as the new admin.
@@ -92,41 +94,46 @@ All JSON. Every response uses one envelope, `{ code, message, data?, errors?, re
 | POST | `/v1/admin/invites` | Invite a new admin by `{ email }` |
 | POST | `/v1/admin/invites/:token/accept` | No auth: invitee sets `{ name }`, creating the admin account |
 
-List endpoints share the query params `page`, `limit` (≤ 100), `search`, `from`/`to` (`YYYY-MM-DD`), `sort` (a per-endpoint whitelist) and `order` (`asc`/`desc`).
+List endpoints share the query params `page`, `limit` (≤ 100), `search`, `from`/`to` (`YYYY-MM-DD`), `sort` (a per-endpoint whitelist) and `order` (`asc`/`desc`). Transactions, disputes and the review queue also take `min_amount_cents` / `max_amount_cents` (inclusive, ZAR cents; set from the amount slider in the UI's Filters modal).
 
 **Dispute lifecycle:** `SUBMITTED → UNDER_REVIEW → RESOLVED | REJECTED`. The customer can `WITHDRAW` from either open state. It's forward-only, enforced in SQL, with one open dispute per transaction and an audit row for every transition.
 
 ## Tests and checks
 
-These run on the host, so you'll need Node 24 (`.nvmrc`) and pnpm (`corepack enable`). Keep the compose stack up: the api tests use its Postgres (in a separate `transaction-dispute-test` database, so your demo data is untouched) and read sign-in codes from its Mailpit.
+These run on the host. Keep the compose stack up: the api tests use its Postgres (in a separate `transaction-dispute-test` database, so your demo data is untouched) and read sign-in codes from its Mailpit.
 
 ```sh
 pnpm install
 pnpm lint && pnpm typecheck && pnpm build
-pnpm test        # 65 api integration tests (real OTP flow, real DB) + 8 web unit tests
+pnpm test        # 71 api integration tests (real OTP flow, real DB) + 12 web unit tests
 ```
 
 Don't run `pnpm test` *inside* the `api` container. Its `DATABASE_URL` points at the dev database, which the suite would reset.
 
 CI (`.github/workflows/build.yml`) runs the same checks on every push, plus a smoke test that runs `docker compose up`, hits `/healthz` and `/`, and seeds.
 
-## Useful commands
+## Scripts
 
-```sh
-docker compose logs -f api               # follow api logs (also: web, database, mailpit, ntfy)
-docker compose exec api pnpm db:seed     # reset demo data
-docker compose exec api pnpm db:purge    # empty every table, keep the schema
-docker compose restart api               # restart one service (source changes hot-reload; no restart needed)
-docker compose up -d --force-recreate    # needed after editing a .env file (restart doesn't re-read it)
-docker compose down -v                   # full reset: database + node_modules volumes
-```
+Run from the repo root with `pnpm <name>`.
+
+| Script | Runs | Does |
+| --- | --- | --- |
+| `docker:up` | `docker compose up -d --build --wait` | Build (if needed) and start the stack, wait until healthy |
+| `docker:down` | `docker compose down` | Stop and remove the containers, keep the data |
+| `docker:logs` | `docker compose logs -f` | Follow every service's logs (`docker compose logs -f api` for one) |
+| `docker:reset` | `docker compose down -v --rmi local --remove-orphans` | Full cleanup: containers, network, volumes (database included), built images |
+| `db:seed` | `docker compose exec api pnpm db:seed` | Reset the demo data |
+| `db:purge` | `docker compose exec api pnpm db:purge` | Empty every table, keep the schema |
+| `clean` | `rm -rf node_modules dist .turbo …` | Delete host-side install/build output (keeps `pnpm-lock.yaml`) |
+
+Source changes hot-reload without a restart. After editing a `.env` file, run `docker:up` again: a plain `docker compose restart` doesn't re-read env files.
 
 ## Troubleshooting
 
 - **`address already in use` on startup.** Something else on your machine holds one of 3000, 8080, 5432, 1025, 8025 or 8090. Stop it, or change the left-hand side of that service's `ports:` in `compose.yml`. If it's 3000 or 8080, also update `CORS_ORIGIN`/`FRONTEND_URL` in `api/.env` and `VITE_API_URL` in `web/.env` to match.
 - **No sign-in code arrives.** Codes never go to a real inbox. Look in Mailpit at http://localhost:8025.
 - **First page load is slow.** Vite bundles dependencies on the first request after a fresh `up`. Later loads are fast.
-- **Stuck after pulling new dependencies.** Run `docker compose down -v && docker compose up -d --build --wait`, then seed again.
+- **Stuck after pulling new dependencies.** Run `pnpm docker:reset && pnpm docker:up`, then `pnpm db:seed`.
 
 ## Performance
 

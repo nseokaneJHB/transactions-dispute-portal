@@ -4,8 +4,11 @@ import { TRANSACTION_SORT } from "../constant.js";
 
 import { integerSchema, stringSchema, uuidSchema } from "./field.js";
 import {
+	amountRangeQueryShape,
 	globalResponseSchema,
+	isOrderedAmountRange,
 	isOrderedDateRange,
+	ORDERED_AMOUNT_RANGE_ISSUE,
 	ORDERED_DATE_RANGE_ISSUE,
 	paginatedGlobalResponseSchema,
 	paginationQuerySchema,
@@ -13,18 +16,20 @@ import {
 
 /**
  * Query for `GET /v1/transactions` — a page of the caller's transactions.
- * `search` matches the merchant name; `from` / `to` bound `transacted_at`; `sort`
- * picks the column (`order` its direction). Everything but `sort` is inherited
- * from `paginationQuerySchema`.
+ * `search` matches the merchant name; `from` / `to` bound `transacted_at`;
+ * `min_amount_cents` / `max_amount_cents` bound the amount; `sort` picks the
+ * column (`order` its direction).
  */
 export const transactionsQuerySchema = paginationQuerySchema
 	.extend({
+		...amountRangeQueryShape,
 		sort: z
 			.enum(TRANSACTION_SORT)
 			.optional()
 			.describe("Column to sort the page by — defaults to `transacted_at`"),
 	})
-	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE);
+	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE)
+	.refine(isOrderedAmountRange, ORDERED_AMOUNT_RANGE_ISSUE);
 
 /**
  * One transaction on the wire. Field names mirror the `transaction` table's

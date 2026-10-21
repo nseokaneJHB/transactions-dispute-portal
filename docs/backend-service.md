@@ -12,7 +12,7 @@ Every response is `shared`'s `globalResponseSchema` (`shared/src/schema/global.t
 
 ### The shared list query (`docs/progress-and-decisions.md` #57)
 
-Every list endpoint's query extends one base (`paginationQuerySchema`): `page`, `limit` (≤ 100), `search` (case-insensitive substring across that list's text columns, trimmed), `from` / `to` (`YYYY-MM-DD`, inclusive, `from ≤ to` or `422`), `order` (`asc` / `desc`, default `desc`). Each endpoint adds a **whitelisted** `sort` — an unlisted value is a `422`, never an interpolated column: transactions `transacted_at | merchant | amount_cents`; disputes `created_at | merchant | amount_cents | status`; admin disputes the same plus `customer`; admin invites `email | status | created_at | expires_at`.
+Every list endpoint's query extends one base (`paginationQuerySchema`): `page`, `limit` (≤ 100), `search` (case-insensitive substring across that list's text columns, trimmed), `from` / `to` (`YYYY-MM-DD`, inclusive, `from ≤ to` or `422`), `order` (`asc` / `desc`, default `desc`). Transactions, disputes and admin disputes also take `min_amount_cents` / `max_amount_cents`: non-negative integers in ZAR cents, an inclusive bound on the transaction amount (for disputes, the disputed transaction's), `min ≤ max` or `422`. Each endpoint adds a **whitelisted** `sort` — an unlisted value is a `422`, never an interpolated column: transactions `transacted_at | merchant | amount_cents`; disputes `created_at | merchant | amount_cents | status`; admin disputes the same plus `customer`; admin invites `email | status | created_at | expires_at`.
 
 ### Auth (email-OTP login — `docs/progress-and-decisions.md` #21/#37)
 

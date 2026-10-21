@@ -13,6 +13,7 @@ import {
 	adminDisputeListResponseSchema,
 	disputeStatusCountsSchema,
 	adminDisputeSummaryResponseSchema,
+	disputeNotificationSchema,
 } from "../schema/dispute.js";
 
 export type DisputeCreateBody = z.infer<typeof disputeCreateBodySchema>;
@@ -42,3 +43,5 @@ export type DisputeStatusCounts = z.infer<typeof disputeStatusCountsSchema>;
 export type AdminDisputeSummaryResponse = z.infer<
 	typeof adminDisputeSummaryResponseSchema
 >;
+
+export type DisputeNotification = z.infer<typeof disputeNotificationSchema>;

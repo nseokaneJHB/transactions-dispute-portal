@@ -31,8 +31,9 @@ const DisputesPage = () => {
 				result={result}
 				search={search}
 				onSearchChange={(next) => navigate({ search: next })}
-				searchPlaceholder="Merchant or description"
+				searchPlaceholder="Merchant or words in the dispute"
 				statusOptions={Object.values(DISPUTE_STATUS)}
+				showAmountRange
 				emptyState={{
 					icon: ScaleIcon,
 					title: "No disputes match",

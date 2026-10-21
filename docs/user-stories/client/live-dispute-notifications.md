@@ -9,8 +9,15 @@
    topic** the API publishes to on admin transitions
    (`docs/user-stories/admin/admin-move-to-review.md`,
    `docs/user-stories/admin/admin-resolve-or-reject.md`).
-2. On a message it toasts ("One of your disputes is now Under review") and
-   `refreshQuery`s the disputes list + router.
+2. The message body is `{ dispute_id, status }` — only an opaque id, since
+   ntfy topics are unauthenticated (`docs/progress-and-decisions.md` #66).
+   The hook `refreshQuery`s the disputes list, that dispute's detail and the
+   router, so the row moves without a reload.
+3. It fetches the dispute through the authenticated `GET
+   /v1/disputes/:disputeId` and toasts "Dispute under review — Sasol ·
+   R 1 117,20 is now Under Review." with a **View** button that opens
+   `/disputes/{disputeId}`. If that lookup fails, the toast falls back to
+   "One of your disputes is now …", still with **View**.
 
 Best-effort, self-hosted (`docs/dev-tools.md`).
 

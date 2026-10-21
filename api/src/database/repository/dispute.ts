@@ -1,4 +1,12 @@
-import { and, asc, count, desc, eq, getTableColumns, inArray } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	getTableColumns,
+	inArray,
+} from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import {
@@ -25,6 +33,7 @@ import type { Executor } from "../executor.js";
 import {
 	containsText,
 	sortDirection,
+	withinAmount,
 	withinDays,
 	type Page,
 } from "./list-filters.js";
@@ -60,7 +69,8 @@ const reviewSortColumnFor = (sort: AdminDisputesQuery["sort"]): PgColumn =>
  * `resolved_by` (internal) — excluded from the query itself, derived from the
  * table so it follows schema changes.
  */
-const { user_id, resolved_by, ...CUSTOMER_COLUMNS } = getTableColumns(DisputeModel);
+const { user_id, resolved_by, ...CUSTOMER_COLUMNS } =
+	getTableColumns(DisputeModel);
 
 /**
  * The disputed transaction's own columns, joined onto every dispute read so a
@@ -103,7 +113,9 @@ type CustomerSummary = {
  */
 type DisputeMutationRow = Omit<DisputeModelSelect, "user_id" | "resolved_by">;
 
-export type DisputeRow = DisputeMutationRow & { transaction: TransactionSummary };
+export type DisputeRow = DisputeMutationRow & {
+	transaction: TransactionSummary;
+};
 
 export type AdminDisputeRow = DisputeModelSelect & {
 	transaction: TransactionSummary;
@@ -136,7 +148,8 @@ interface NewDispute {
 /**
  * One page of a user's disputes plus the full match count. `search` matches the
  * dispute description and the disputed merchant's name; `from` / `to` bound
- * `created_at`; `sort` / `order` pick the column and direction (`created_at`
+ * `created_at`; `min_amount_cents` / `max_amount_cents` bound the disputed
+ * transaction's amount; `sort` / `order` pick the column and direction (`created_at`
  * descending by default).
  */
 export const findDisputesByUser = async (
@@ -157,6 +170,11 @@ export const findDisputesByUser = async (
 				)
 			: undefined,
 		withinDays(DisputeModel.created_at, options.from, options.to),
+		withinAmount(
+			TransactionModel.amount_cents,
+			options.min_amount_cents,
+			options.max_amount_cents,
+		),
 	);
 
 	const direction = sortDirection(options.order);
@@ -207,7 +225,9 @@ export const findUserDisputeById = async (
 		)
 		.limit(1);
 
-	const [row] = await (queryOptions.lockForUpdate ? query.for("update") : query);
+	const [row] = await (queryOptions.lockForUpdate
+		? query.for("update")
+		: query);
 
 	return row;
 };
@@ -234,6 +254,11 @@ export const findDisputesForReview = async (
 				)
 			: undefined,
 		withinDays(DisputeModel.created_at, options.from, options.to),
+		withinAmount(
+			TransactionModel.amount_cents,
+			options.min_amount_cents,
+			options.max_amount_cents,
+		),
 	);
 
 	const onTransaction = eq(DisputeModel.transaction_id, TransactionModel.id);
@@ -250,7 +275,11 @@ export const findDisputesForReview = async (
 				sortDirection(options.order)(reviewSortColumnFor(options.sort)),
 				desc(DisputeModel.id),
 			]
-		: [asc(DisputeModel.status), asc(DisputeModel.created_at), desc(DisputeModel.id)];
+		: [
+				asc(DisputeModel.status),
+				asc(DisputeModel.created_at),
+				desc(DisputeModel.id),
+			];
 
 	const [rows, [tally]] = await Promise.all([
 		executor

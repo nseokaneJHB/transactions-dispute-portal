@@ -14,7 +14,13 @@
 		"format": "prettier --write .",
 		"typecheck": "turbo typecheck",
 		"test": "turbo test",
-		"clean": "rm -rf node_modules dist */node_modules */dist */.turbo .pnpm-store pnpm-lock.yaml web/.tanstack"
+		"clean": "rm -rf node_modules dist */node_modules */dist .turbo */.turbo .pnpm-store web/.tanstack",
+		"docker:up": "docker compose up -d --build --wait",
+		"docker:down": "docker compose down",
+		"docker:logs": "docker compose logs -f",
+		"docker:reset": "docker compose down -v --rmi local --remove-orphans",
+		"db:seed": "docker compose exec api pnpm db:seed",
+		"db:purge": "docker compose exec api pnpm db:purge"
 	},
 	"devDependencies": {
 		"@eslint/js": "10.0.1",

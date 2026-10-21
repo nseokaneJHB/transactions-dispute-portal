@@ -11,7 +11,7 @@ import { createQueryClient } from "@/integrations/query-provider";
 /**
  * List-query params read best in a fixed order regardless of the order the UI
  * happens to set them: `page` then `limit` always lead; then `search`, then
- * `status`; the date range and finally `sort` / `order` trail. Any other key
+ * `status`; the date and amount ranges and finally `sort` / `order` trail. Any other key
  * sorts into the middle. Only affects the query string's rendering, not its
  * meaning.
  */
@@ -22,6 +22,8 @@ const SEARCH_KEY_RANK: Record<string, number> = {
 	status: 3,
 	from: 95,
 	to: 96,
+	min_amount_cents: 97,
+	max_amount_cents: 97.5,
 	sort: 98,
 	order: 99,
 };
@@ -29,9 +31,7 @@ const SEARCH_KEY_RANK: Record<string, number> = {
 const stringifySearch = (search: Record<string, unknown>): string => {
 	const ordered = Object.fromEntries(
 		Object.keys(search)
-			.sort(
-				(a, b) => (SEARCH_KEY_RANK[a] ?? 50) - (SEARCH_KEY_RANK[b] ?? 50),
-			)
+			.sort((a, b) => (SEARCH_KEY_RANK[a] ?? 50) - (SEARCH_KEY_RANK[b] ?? 50))
 			.map((key) => [key, search[key]]),
 	);
 	return defaultStringifySearch(ordered);

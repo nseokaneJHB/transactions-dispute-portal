@@ -2,7 +2,10 @@ import { and, desc, eq, getTableColumns } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { TRANSACTION_SORT } from "@transaction-dispute-portal/shared";
-import type { TransactionSort, TransactionsQuery } from "@transaction-dispute-portal/shared";
+import type {
+	TransactionSort,
+	TransactionsQuery,
+} from "@transaction-dispute-portal/shared";
 
 import { TransactionModel } from "../schema/index.js";
 import type { TransactionModelSelect } from "../schema/index.js";
@@ -11,6 +14,7 @@ import type { Executor } from "../executor.js";
 import {
 	containsText,
 	sortDirection,
+	withinAmount,
 	withinDays,
 	type Page,
 } from "./list-filters.js";
@@ -40,7 +44,8 @@ type FindManyOptions = TransactionsQuery & { userId: string };
 
 /**
  * One page of a user's transactions plus the full match count. `search` matches
- * the merchant name; `from` / `to` bound `transacted_at`; `sort` / `order` pick
+ * the merchant name; `from` / `to` bound `transacted_at`; `min_amount_cents` /
+ * `max_amount_cents` bound `amount_cents`; `sort` / `order` pick
  * the column and direction (`transacted_at` descending by default).
  */
 export const findTransactionsByUser = async (
@@ -53,6 +58,11 @@ export const findTransactionsByUser = async (
 			? containsText(options.search, TransactionModel.merchant_name)
 			: undefined,
 		withinDays(TransactionModel.transacted_at, options.from, options.to),
+		withinAmount(
+			TransactionModel.amount_cents,
+			options.min_amount_cents,
+			options.max_amount_cents,
+		),
 	);
 
 	const direction = sortDirection(options.order);

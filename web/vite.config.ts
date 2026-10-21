@@ -9,7 +9,7 @@ import viteReact from "@vitejs/plugin-react";
 
 export default defineConfig({
 	optimizeDeps: {
-		include: ["@transaction-dispute-portal/shared"],
+		exclude: ["@transaction-dispute-portal/shared"],
 	},
 	resolve: {
 		alias: {
