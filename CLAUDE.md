@@ -37,12 +37,12 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - Package manager: pnpm + Turborepo
 - Frontend: TanStack Start
 - Backend: Fastify
-- Auth: Better Auth, email-OTP login. Every login sends a one-time code to the account's email; entering it is the only credential (see `docs/progress-and-decisions.md` #21 for why, and for the reversal from the original design). This puts outbound email delivery on the login-critical path — accepted as a real tradeoff: Mailpit for dev/demo, real SMTP documented (not built) as the production requirement (`docs/progress-and-decisions.md` #21, `docs/backend-service.md` §2). Still no Google OAuth/social login (`docs/backend-service.md`)
+- Auth: Better Auth, email-OTP login. Every login sends a one-time code to the account's email; entering it is the only credential (see `docs/progress-and-decisions.md` #21 for why). This puts outbound email delivery on the login-critical path — accepted as a real tradeoff: Mailpit for dev/demo, real SMTP documented (not built) as the production requirement (`docs/progress-and-decisions.md` #21, `docs/backend-service.md` §2). Still no Google OAuth/social login (`docs/backend-service.md`)
 - ORM: Drizzle
 - DB: Postgres (`docs/progress-and-decisions.md` #23)
 - Tests: Vitest
 - CI: GitHub Actions — lint/typecheck/build/test plus a `docker compose` smoke test of the dev stack. A real deploy pipeline is described in `docs/production-runbook.md`, not built
-- Containers: one dev `Dockerfile` per package + a single `compose.yml`. `docker compose up` is the entire local stack (Postgres, api, web, Mailpit, ntfy, an nginx reverse proxy in front of web/api/ntfy — `docs/progress-and-decisions.md` #61), migrations run on start, `db:seed` is one command. Production containerisation lives in `docs/production-runbook.md`, not built
+- Containers: one dev `Dockerfile` per package + a single `compose.yml`. `docker compose up` is the entire local stack (Postgres, api, web, Mailpit, ntfy — each on its own `localhost` port, no reverse proxy, `docs/progress-and-decisions.md` #65), migrations run on start, `db:seed` is one command (`docker compose exec api pnpm db:seed`). Production containerisation lives in `docs/production-runbook.md`, not built
 
 ## Explicitly out of scope
 

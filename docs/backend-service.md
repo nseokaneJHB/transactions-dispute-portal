@@ -4,7 +4,7 @@ The `api` package: Fastify + Drizzle + Postgres, Better Auth for email-OTP login
 
 ## API surface
 
-Sketch — refine, don't reinvent. All routes below versioned under `/v1/` (`docs/progress-and-decisions.md` #18) except health checks.
+All routes below are versioned under `/v1/` (`docs/progress-and-decisions.md` #18) except health checks.
 
 ### Response envelope
 
@@ -49,18 +49,16 @@ Every route here is `authenticate` + `authorize(ADMIN)` — a customer session i
 
 The dispute lifecycle is forward-only (`SUBMITTED → UNDER_REVIEW → RESOLVED | REJECTED`), plus the customer's own `WITHDRAWN` exit from either open state — no backward edges, terminal states terminal. "Reopen after a rejection" is handled by opening a *new* dispute (the old one stays as an immutable record; the partial unique index only blocks a second *open* dispute), not a backward transition. An admin declining a review, and any supervisor-override / assignment model, are out of scope — `UNDER_REVIEW` is an unassigned status flag and the admin portal is minimal by design (`docs/progress-and-decisions.md` #16/#41).
 
-A customer being able to resolve their own dispute would be a real hole in the authz story, not a shortcut — this keeps the customer and admin auth paths honestly separate.
-
-This is now the *only* resolve path. The original demo stand-in, `POST /internal/disputes/:id/resolve` (shared-secret `x-internal-token` header, no admin session), is removed — decision 16's open question resolved in favor of removing it, since keeping two live auth mechanisms for the same action was two things to explain instead of one.
+Resolving lives only on the admin surface. A customer resolving their own dispute would be an authz hole (`docs/progress-and-decisions.md` #16).
 
 ### Health
 
 - `GET /healthz` — liveness
-- `GET /readyz` — readiness; wired into the k8s manifest's probes — see `docs/infrastructure.md`
+- `GET /readyz` — readiness (bounded `select 1`; 503 while draining). Production probe wiring: `docs/production-runbook.md`
 
 ## Auth: verifying credentials belong to the signer-in
 
-"How do we know the credentials being used to sign in actually belong to the person signing in?" Login is email-OTP — Better Auth's built-in email-OTP plugin (`docs/progress-and-decisions.md` #21; see that decision for why username+password was rejected). Every login sends a one-time code to the account's email; entering it correctly, within its expiry, is the only credential. There's no separate signup-time "prove you own this email" step — every login already is that proof (decision 17's one-time signup-only verification gate is superseded: OTP subsumes it).
+"How do we know the credentials being used to sign in actually belong to the person signing in?" Login is email-OTP — Better Auth's built-in email-OTP plugin (`docs/progress-and-decisions.md` #21; see that decision for why username+password was rejected). Every login sends a one-time code to the account's email; entering it correctly, within its expiry, is the only credential. There's no separate signup-time email verification, because every login already proves ownership of the inbox.
 
 ### 1. OTP code integrity — built
 
@@ -73,13 +71,13 @@ A 6-digit OTP code has a narrow search space (1,000,000 possibilities) and a sho
 
 ### 2. The login-critical-path dependency this creates — accepted, and resolved
 
-Decision 1 originally rejected email-OTP because it puts outbound email delivery on the path every login depends on — a real risk for the one review event with no do-over. Decision 21 reverses that call by explicit instruction; this section accounts for what that costs and how it's resolved (`docs/progress-and-decisions.md` #21).
+Email-OTP puts outbound email delivery on the path every login depends on (`docs/progress-and-decisions.md` #21). Here's what that costs and how it's handled.
 
-**Resolved: Mailpit is accepted as sufficient for dev/demo.** Committed `api/.env` points `SMTP_HOST`/`SMTP_PORT` at the local Mailpit catcher; the OTP code is readable at `localhost:8025` the moment it's "sent" — no auth, no external call, nothing secret in that config. Real SMTP is **documented as a production requirement, not built** — the same "documented, not built" pattern decision 13 used for signup verification.
+**Resolved: Mailpit is accepted as sufficient for dev/demo.** Committed `api/.env` points `SMTP_HOST`/`SMTP_PORT` at the local Mailpit catcher; the OTP code is readable at `localhost:8025` the moment it's "sent" — no auth, no external call, nothing secret in that config. Real SMTP is **documented as a production requirement, not built**.
 
 **Mailpit's real limitation, and why it doesn't matter here:** no per-recipient mailbox isolation — its only auth option (`MP_UI_AUTH_FILE`) is one shared username/password for the *entire* web UI. Anyone holding that credential sees every account's OTP in one inbox — the same shared-topic problem decision 3 flagged for ntfy, and not configurable away. Acceptable because Mailpit's actual audience is one trusted operator (Nolan locally, or a reviewer running their own `docker compose up`) reading codes for accounts they themselves are testing, not multiple people sharing one instance — this project has no live cloud deployment.
 
-**Production:** real per-recipient isolation is inherent to not using Mailpit at all — swap `SMTP_HOST`/`PORT`/`USER`/`PASS` (already provider-agnostic, decisions 14/19) for a real transactional provider and every user's OTP goes to their own inbox, gated by their own email login. Zero code change, an env-var swap — documented, not built, since this submission has no production deployment to point it at.
+**Production:** real per-recipient isolation is inherent to not using Mailpit at all — swap `SMTP_HOST`/`PORT`/`USER`/`PASS` (already provider-agnostic) for a real transactional provider and every user's OTP goes to their own inbox, gated by their own email login. Zero code change, an env-var swap — documented, not built, since this submission has no production deployment to point it at.
 
 ### 3. Account-recovery & compromise alerts — built, via outbound SMTP
 
@@ -90,9 +88,9 @@ Built:
 - **New-device login alert** — a Better Auth `databaseHooks.session.create.after` hook (`lib/security-notifications.ts`) fires an email (async, `void`-ed, never awaited into the login response) when a session's `user_agent` has no earlier session on record. Missing `user_agent` is skipped (can't be matched; only non-browser clients omit it). Seed data gives demo accounts a known-device session so "quiet on known device, alert on new" is demonstrable — the primary way a compromised account gets noticed, now that "compromised" means "someone else can receive your OTP codes."
 - **Email-change approval to the _old_ address** — `POST /v1/auth/change-email` (`{ newEmail }`, authenticated) wraps Better Auth's `changeEmail`: an approval link goes to the account's **current** address first (`sendChangeEmailConfirmation`), then a verification link to the new one (`sendVerificationEmail`); `POST /v1/auth/change-email/confirm` (`{ token }`) applies each step. An attacker with a live session can't quietly redirect where OTP codes go — the real owner gets an approval request first. Response is identical whether or not the target address already exists (no account probing).
 
-No separate recovery credential exists: email access *is* the credential, and losing it means no self-service recovery — accepted, documented not built (`docs/progress-and-decisions.md` #14's narrowing note).
+No separate recovery credential exists: email access *is* the credential, and losing it means no self-service recovery — accepted, documented not built.
 
-SMTP config is provider-agnostic (`SMTP_HOST`/`PORT`/`USER`/`PASS`/`FROM` — Gmail App Password or any transactional provider). Committed `api/.env` points at the local Mailpit catcher (no auth, nothing secret). For real inbox delivery, put real credentials in `SMTP_USER`/`PASS`/`FROM` — `api/.env` directly or the gitignored `api/.env.local` (`docs/progress-and-decisions.md` #34).
+SMTP config is provider-agnostic (`SMTP_HOST`/`PORT`/`USER`/`PASS`/`FROM` — Gmail App Password or any transactional provider). Committed `api/.env` points at the local Mailpit catcher (no auth, nothing secret). For real inbox delivery, put real credentials in `SMTP_USER`/`PASS`/`FROM` in `api/.env` locally and don't commit them (`docs/progress-and-decisions.md` #34).
 
 ### Explicitly rejected: CAPTCHA / third-party bot detection on login
 

@@ -26,5 +26,33 @@ The two links use the same frontend route and the same confirm endpoint; the
 page just tells the user to follow whichever email is still waiting.
 
 Too many change-email requests from one IP, or a bad/expired confirm token —
-see `docs/user-stories/auth/change-sign-in-email-rate-limited.md` and
-`docs/user-stories/auth/change-sign-in-email-invalid-or-expired-token.md`.
+see *too many requests from one IP* (below) and
+*bad or expired confirm token* (below).
+
+## Error cases
+
+### Bad or expired confirm token
+
+**Trigger:** `POST /v1/auth/change-email/confirm` (`{ token }`, no auth) is
+called with a token that doesn't match, or one that has passed its
+`EMAIL_CHANGE_TOKEN_EXPIRY_MINUTES` (30 min) expiry. This applies to either
+leg of the two-step confirm — the approval-link token sent to the current
+address, or the verification-link token sent to the new address.
+
+**Response:** `401`, `"start the change again"`.
+
+**What the user sees / does next:** the `/account/email-change` page shows the
+error; the user goes back to `/account` and re-submits the new address from
+step 1, restarting the whole double-opt-in flow.
+
+### Too many requests from one IP
+
+**Trigger:** more than `OTP.MAX_ATTEMPTS` calls to `POST /v1/auth/change-email`
+from the same IP within a minute — the same per-route rate-limiting mechanism
+used across the auth routes (`docs/progress-and-decisions.md` #37).
+
+**Response:** `429` via the shared response envelope. `docs/user-stories/auth/change-sign-in-email.md`
+documents the threshold but not bespoke copy for this case.
+
+**What the user sees / does next:** a "too many attempts, try again shortly"
+style message on `/account`; the user waits out the window and resubmits.

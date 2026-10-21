@@ -4,59 +4,52 @@ How the system connects end to end: container topology, data model, one real req
 
 ## Container topology
 
-`proxy` (nginx, `docs/progress-and-decisions.md` #61/#64) is the only service publishing app-facing ports (`:80`, `:8025`, `:8090`) — `web`, `api`, `mailpit`, and `ntfy` are all `expose`-only, reachable exclusively through it. Only `database` still publishes its own port directly, for `psql`.
+`docker compose up -d` starts five containers in one compose project (`transaction-dispute-portal`). Each publishes its own `localhost` port; there is no reverse proxy (`docs/progress-and-decisions.md` #65).
 
 ```mermaid
 flowchart LR
     Browser(["Browser<br/>customer / admin"])
     DevTools(["Dev tools<br/>psql · Mailpit UI · ntfy UI"])
 
-    Proxy["proxy — nginx<br/>:80 / :8025 / :8090 — the only published app ports"]
-
     subgraph App["application tier"]
         direction TB
-        Web["web<br/>TanStack Start · :3000"]
-        Api["api<br/>Fastify · :8080"]
+        Web["web<br/>TanStack Start · localhost:3000"]
+        Api["api<br/>Fastify · localhost:8080"]
     end
 
     subgraph Data["data & support tier"]
         direction TB
-        Db[("database<br/>Postgres · :5432")]
-        Mailpit["mailpit<br/>:1025 smtp (direct) / :8025 ui"]
-        Ntfy["ntfy<br/>:80 internal"]
+        Db[("database<br/>Postgres · localhost:5432")]
+        Mailpit["mailpit<br/>smtp :1025 · UI localhost:8025"]
+        Ntfy["ntfy<br/>localhost:8090"]
     end
 
-    Browser --> Proxy
-    Proxy -->|"/"| Web
-    Proxy -->|"/v1/*, /healthz, /readyz"| Api
-    Proxy -.->|"/ntfy/* (SSE)"| Ntfy
-    Proxy -.->|"mailpit UI :8025"| Mailpit
-    Proxy -.->|"ntfy UI :8090"| Ntfy
-
-    Web -.->|"SSR loaders, direct"| Api
+    Browser -->|"pages"| Web
+    Browser -->|"/v1/* (XHR, cookie)"| Api
+    Browser -.->|"SSE subscribe"| Ntfy
+    Web -.->|"SSR loaders, http://api:8080"| Api
 
     Api --> Db
-    Api -->|"OTP / invite email, direct smtp"| Mailpit
-    Api -.->|"publish, direct"| Ntfy
+    Api -->|"OTP / invite email"| Mailpit
+    Api -.->|"publish, http://ntfy"| Ntfy
 
     DevTools -.- Db
-    DevTools -.- Proxy
+    DevTools -.- Mailpit
+    DevTools -.- Ntfy
 
-    classDef proxy fill:#f6e9d3,stroke:#97600f,color:#4a3208,stroke-width:1.5px;
     classDef app fill:#dbe6f5,stroke:#31578f,color:#1c3252;
     classDef data fill:#dcefe1,stroke:#1f7a4d,color:#123f28;
     classDef client fill:#eceee9,stroke:#57655d,color:#2c332e;
 
-    class Proxy proxy
     class Web,Api app
     class Db,Mailpit,Ntfy data
     class Browser,DevTools client
 ```
 
-Two paths run through this topology twice, browser vs. server:
+Two paths reach `api`/`ntfy` two different ways:
 
-- **`web` → `api`.** Browser fetches go out to `http://dispute-portal` and back through the proxy (`VITE_API_URL`). `web`'s server (TanStack Start's SSR loaders, inside the `web` container) calls `api` directly over the compose network instead (`SERVER_API_URL=http://transaction-dispute-portal-api:8080`), bypassing the proxy.
-- **`api` → `ntfy`.** `api` publishes dispute-status events straight to `ntfy` container-to-container (`NTFY_URL`), no proxy hop. The browser's SSE subscription goes through the proxy at `/ntfy/*` instead, since it only knows the one public origin (`docs/progress-and-decisions.md` #61). SSE needs `proxy_buffering off` and a long read timeout, so `/ntfy/` has its own `location` block in `nginx.conf`.
+- **`web` → `api`.** The browser calls `http://localhost:8080` (`VITE_API_URL`). The session cookie travels because `localhost:3000` and `localhost:8080` are same-site, and CORS allows `http://localhost:3000`. TanStack Start's SSR loaders inside the `web` container call `http://api:8080` (`SERVER_API_URL`) over the compose network instead, forwarding the caller's cookie.
+- **`api` → `ntfy`.** `api` publishes container-to-container (`NTFY_URL=http://ntfy`). The browser subscribes over SSE at `http://localhost:8090` (`VITE_NTFY_URL`).
 
 ## Data model
 
@@ -159,52 +152,40 @@ erDiagram
 
 ## Request flow: submit → review → resolve → notify
 
-One flow through the topology above, chosen for the parts that are easy to get wrong: the guarded writes (`docs/progress-and-decisions.md` #4/#41) and the publish-direct-but-subscribe-proxied split for `ntfy`.
+One flow through the topology above, chosen for the parts that are easy to get wrong: the guarded writes (`docs/progress-and-decisions.md` #4/#41) and the publish/subscribe split for `ntfy`.
 
 ```mermaid
 sequenceDiagram
     participant C as Customer browser
-    participant P as proxy (nginx)
     participant A as api (Fastify)
     participant D as database (Postgres)
     participant N as ntfy
     participant Ad as Admin browser
 
-    Note over C,N: Customer's browser holds an open SSE connection to /ntfy/&lt;their-topic&gt; the whole time
+    Note over C,N: Customer's browser holds an open SSE connection to ntfy's dispute-updates-&lt;userId&gt; topic
 
-    C->>P: POST /v1/disputes
-    P->>A: forward
-    A->>D: guarded INSERT<br/>(one open dispute per transaction, #40)
-    D-->>A: 201, dispute SUBMITTED
-    A-->>P: 201
-    P-->>C: 201
+    C->>A: POST /v1/disputes
+    A->>D: INSERT (partial unique index: one open dispute per transaction, #40)
+    A-->>C: 201, dispute SUBMITTED
 
-    Ad->>P: POST /v1/admin/disputes/:id/review
-    P->>A: forward
-    A->>D: guarded UPDATE … WHERE status='SUBMITTED'
-    D-->>A: UNDER_REVIEW
-    A-->>P: 200
-    P-->>Ad: 200
-    A->>N: publish "under review" (direct, NTFY_URL)
-    N--)P: SSE frame
-    P--)C: SSE frame → toast
+    Ad->>A: POST /v1/admin/disputes/:id/review
+    A->>D: UPDATE … WHERE status='SUBMITTED'
+    A-->>Ad: 200, UNDER_REVIEW
+    A->>N: publish "under review"
+    N--)C: SSE frame → toast
 
-    Ad->>P: POST /v1/admin/disputes/:id/resolve
-    P->>A: forward
-    A->>D: guarded UPDATE … WHERE status='UNDER_REVIEW'
-    D-->>A: RESOLVED
-    A-->>P: 200
-    P-->>Ad: 200
-    A->>N: publish "resolved" (direct, NTFY_URL)
-    N--)P: SSE frame
-    P--)C: SSE frame → toast
+    Ad->>A: POST /v1/admin/disputes/:id/resolve
+    A->>D: UPDATE … WHERE status='UNDER_REVIEW'
+    A-->>Ad: 200, RESOLVED
+    A->>N: publish "resolved"
+    N--)C: SSE frame → toast
 ```
 
-The two `UPDATE … WHERE` steps are load-bearing: the "from" status sits in the `WHERE` clause, not a prior read, so a concurrent second call matches nothing and gets `409` instead of double-writing or double-publishing — verified under 5,000 simultaneous identical requests (this session's load-test artifact), not just the sequential case the integration suite covers.
+The two `UPDATE … WHERE` steps are load-bearing: the "from" status sits in the `WHERE` clause, not a prior read, so a concurrent second call matches nothing and gets `409` instead of double-writing or double-publishing.
 
-## k8s manifests vs. documented-only targets
+## Production target (documented, not built)
 
-`k8s/` manifests are a planned, concrete deliverable, not just prose (`docs/progress-and-decisions.md` #10): `replicas: 3`, resource requests/limits, an HPA keyed on CPU, a PodDisruptionBudget — real enough to point to on screen, never actually deployed. Step-by-step for writing them: `docs/production-runbook.md` §8. Everything else below is target architecture, stated and justified, not built:
+Nothing below is deployed; the step-by-step, including k8s manifests, is `docs/production-runbook.md`.
 
 | Area | Target | Why |
 | --- | --- | --- |
@@ -212,6 +193,4 @@ The two `UPDATE … WHERE` steps are load-bearing: the "from" status sits in the
 | Read replica | For the historic-disputes read path | Once write/read ratio justifies it — ties to the indexing story above |
 | Load balancing | ALB/API Gateway → ECS/Fargate or k8s Ingress in front of the stateless API | Meaningful only *because* the API is stateless; also the stable domain the frontend is built against, so infra can move behind it without invalidating an already-built client bundle (`docs/production-runbook.md` §3) |
 | Event durability | Move the status-change event to SQS/EventBridge | Today it's in-process/simulated; production shouldn't let a notification-consumer failure touch the API request path |
-| Session-lookup cost | Short-TTL cache on the session read, or Better Auth's cookie-cache/JWT session mode | The load test (`docs/progress-and-decisions.md`'s Progress section) shows the DB-backed session check, not Postgres or Fastify, is the authenticated-route ceiling — mitigate the read, don't move state back into the process |
-
-README's cloud/k8s mention: one short paragraph, AWS target (ECS/Fargate + RDS), no live infra required.
+| Session-lookup cost | Short-TTL cache on the session read, or Better Auth's cookie-cache/JWT session mode | The load test (`docs/progress-and-decisions.md` #48) shows the DB-backed session check, not Postgres or Fastify, is the authenticated-route ceiling — mitigate the read, don't move state back into the process |

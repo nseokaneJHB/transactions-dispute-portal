@@ -3,14 +3,13 @@
 This repo is **development-only**. A fresh clone runs one command:
 
 ```sh
-docker compose up -d          # Postgres, api, web, Mailpit, ntfy, an nginx reverse proxy; migrations run on api start
-docker compose exec transaction-dispute-portal-api \
-  pnpm --filter @transaction-dispute-portal/api db:seed   # once, for demo data
+docker compose up -d                  # Postgres, api, web, Mailpit, ntfy; migrations run on api start
+docker compose exec api pnpm db:seed  # once, for demo data
 ```
 
-There is one `compose.yml`, one `Dockerfile` per package (a dev image: full workspace, `tsx`/`vite` watch, source bind-mounted), one committed `.env` per package plus `env/development/.env.database`. No live deployment, no staging, no production images are built anywhere.
+There is one `compose.yml`, one `Dockerfile` per package (a dev image: full workspace, `tsx`/`vite` watch, source bind-mounted), one committed `.env` per package. No live deployment, no staging, no production images are built anywhere.
 
-Deliberate scope choice (`docs/progress-and-decisions.md` #34, and the earlier #24–#27/#32–#33 that built — then this pass removed — a staging pipeline). This document answers *"and how would you actually ship this?"*: nothing here is wired, each section is what you'd add.
+Deliberate scope choice (`docs/progress-and-decisions.md` #42). This document answers *"and how would you actually ship this?"*: nothing here is wired, each section is what you'd add.
 
 ---
 
@@ -58,11 +57,10 @@ A real deployment:
 | --- | --- | --- |
 | AWS | Route53 `api.<yourdomain>` → ALB (+ optional CloudFront) → target group → whatever's serving traffic (ECS service, EKS Ingress, EC2 ASG) | Migrating infra (new region, ECS → EKS, new account) just repoints the target group; the built-in URL never changes, no rebuild, no customer-visible break |
 | Kubernetes (§8) | `Ingress` is the reverse proxy: `api.<yourdomain>` → `Ingress` → `Service` → live `Deployment` pods | Swapping deployments behind a `Service` is invisible above the `Ingress` |
-| This dev stack, today | nginx (`docs/progress-and-decisions.md` #61/#64, `proxy/nginx.conf`) in front of `web`/`api`/`ntfy`/`mailpit`; only the proxy publishes app-facing ports (`:80`/`:8025`/`:8090`) | A one-file toy version of the same proof, live: build against one address, swap what's behind it freely |
 
 Same reasoning applies to every other client-facing URL — `FRONTEND_URL` / `CORS_ORIGIN` (§2), `NTFY_URL` (§6) — resolve through an owned domain, never a cloud-generated hostname.
 
-**Production goes one step further than the dev stack: `api` isn't reachable from the internet at all.** The dev nginx (#61) is infra-level path routing — one address for both, but a browser request for `/v1/disputes` still terminates at the `api` container; nginx just fronts two independently-reachable services. That's enough to prove the one-stable-address claim, but `api` is still a public endpoint. Production closes that: the client holds exactly one address, and everything but `web` sits in a private network with no public IP.
+**In production, `api` isn't reachable from the internet at all.** The dev stack publishes every service on its own `localhost` port (no proxy, `docs/progress-and-decisions.md` #65). Production is the opposite: the client holds exactly one address, and everything but `web` sits in a private network with no public IP.
 
 ```mermaid
 flowchart LR
@@ -118,9 +116,9 @@ A real architectural decision, not a tweak: it flips the CORS/cookie model (`doc
 
 ### Migrations as their own gated step
 
-Do **not** run migrations from the app's start command in production (the dev `compose.yml` only does this because it's safe to re-run against a disposable database). A schema change is a reviewed, approved step, independent of the code rollout (`docs/progress-and-decisions.md` #24).
+Do **not** run migrations from the app's start command in production (the dev `compose.yml` only does this because it's safe to re-run against a disposable database). A schema change is a reviewed, approved step, independent of the code rollout.
 
-The shape that existed before (`.github/workflows/migrate.yml`, removed in `docs/progress-and-decisions.md` #42): `workflow_dispatch` → `drizzle-kit check` (snapshot/drift guard, no DB needed) → fail if the environment's `DATABASE_URL` secret is missing → `pnpm --filter @transaction-dispute-portal/api migrate`. `concurrency` with `cancel-in-progress: false` so two runs never touch one database at once.
+A workflow shape for it: `workflow_dispatch` → `drizzle-kit check` (snapshot/drift guard, no DB needed) → fail if the environment's `DATABASE_URL` secret is missing → `pnpm --filter @transaction-dispute-portal/api migrate`. `concurrency` with `cancel-in-progress: false` so two runs never touch one database at once.
 
 ## 5. Email (SMTP) — on the login-critical path
 
@@ -145,9 +143,9 @@ To deploy, add a workflow that on `main`:
 
 1. reuses the check job (`workflow_call`), then
 2. builds the multi-stage `api` / `web` images and pushes them to a registry (GHCR: `ghcr.io/<owner>/transaction-dispute-portal-{api,web}`), tagged `sha-<commit>` and `latest`;
-3. deploys — `kubectl apply` / Helm / Argo — into an environment protected by GitHub **Environments** required-reviewers (configured in repo Settings → Environments, not expressible in YAML — `docs/progress-and-decisions.md` #25).
+3. deploys — `kubectl apply` / Helm / Argo — into an environment protected by GitHub **Environments** required-reviewers (configured in repo Settings → Environments; not expressible in YAML).
 
-Build tags explicitly from `github.sha` / `github.ref_name`, not `docker/metadata-action` (`docs/progress-and-decisions.md` #25). Keep migrations (§4) a separate manually-approved workflow, not a step here.
+Build tags explicitly from `github.sha` / `github.ref_name`, not `docker/metadata-action`, whose `context: git` can't introspect a detached-HEAD checkout. Keep migrations (§4) a separate manually-approved workflow, not a step here.
 
 ## 8. Kubernetes
 

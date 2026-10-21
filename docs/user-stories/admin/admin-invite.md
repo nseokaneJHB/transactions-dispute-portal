@@ -10,7 +10,7 @@ accepts. **Screens:** `/admin/invites` (send + list),
    **`POST /v1/admin/invites`** (`{ email }`), `authenticate` +
    `authorize(ADMIN)`.
 2. Service checks `findUserByEmail` — an account already exists for that email,
-   see `docs/user-stories/admin/admin-invite-email-taken.md`.
+   see *email already has an account* (below).
 3. Otherwise: generate a `randomBytes(32)` hex token, `expires_at = now +
    ADMIN_INVITE_EXPIRY_HOURS` (72h), insert an `admin_invite` row
    (`invited_by = caller`), and `sendEmail(buildAdminInviteEmail(...))` with a
@@ -20,8 +20,8 @@ accepts. **Screens:** `/admin/invites` (send + list),
 5. The list below the form (`GET /v1/admin/invites`) refreshes.
 
 A customer session, or too many invite sends from one IP — see
-`docs/user-stories/admin/admin-invite-forbidden-non-admin.md` and
-`docs/user-stories/admin/admin-invite-rate-limited.md`.
+*forbidden for a non-admin* (below) and
+*too many sends from one IP* (below).
 
 ## Accept
 
@@ -29,9 +29,9 @@ A customer session, or too many invite sends from one IP — see
    name, submits. Web calls **`POST /v1/admin/invites/:token/accept`**
    (`{ name }`, **no auth** — they have no session).
 2. Service: `findAdminInviteByToken` looks the token up — see
-   `docs/user-stories/admin/admin-invite-token-not-found.md`,
-   `docs/user-stories/admin/admin-invite-already-used.md`, and
-   `docs/user-stories/admin/admin-invite-token-expired.md` for the ways this step can
+   *token not found* (below),
+   *already accepted* (below), and
+   *token expired* (below) for the ways this step can
    fail.
 3. In one transaction: `acceptAdminInvite` — a **guarded** `UPDATE … SET
    accepted_at = now() WHERE token = ? AND accepted_at IS NULL AND expires_at >
@@ -44,8 +44,8 @@ A customer session, or too many invite sends from one IP — see
    `account` row needed (email-OTP looks up the `user` row directly).
 
 A duplicate email slipping through at `createUser`, or too many accept attempts
-from one IP — see `docs/user-stories/admin/admin-invite-accept-email-conflict.md` and
-`docs/user-stories/admin/admin-invite-accept-rate-limited.md`.
+from one IP — see *duplicate email race at account creation* (below) and
+*too many attempts from one IP* (below).
 
 ## Invite list
 
@@ -59,3 +59,113 @@ from one IP — see `docs/user-stories/admin/admin-invite-accept-email-conflict.
 
 No new `AUTH_EVENT` values for invites — the `admin_invite` row's own
 `invited_by` / `accepted_at` / timestamps _are_ the audit record.
+
+## Error cases
+
+### Duplicate email race at account creation
+
+**Trigger:** the guarded `UPDATE … accepted_at` succeeds (the invite itself
+was valid and unused), but the subsequent `createUser({ name, email:
+invite.email, role: ADMIN, email_verified: true })` hits Postgres error
+`23505` on `user_email_uq_idx` / `user_email_unique` — an account for that
+email was created through some other path between the invite being sent and
+being accepted.
+
+**Response:** the global error handler maps Postgres `23505` to `409` via
+`CONFLICT_MESSAGE`.
+
+**What the user sees / does next:** the accept page shows the conflict
+message. This is distinct from
+*Email already has an account* (below) (checked once, at send time)
+— this is the same race caught again at accept time, one transaction later.
+
+### Too many attempts from one IP
+
+**Trigger:** too many calls to `POST /v1/admin/invites/:token/accept` from the
+same IP within a minute. `docs/user-stories/admin/admin-invite.md` notes the accept endpoint has "own
+rate limit" without stating the exact threshold (unlike the send endpoint's
+documented `2 × OTP.MAX_ATTEMPTS`).
+
+**Response:** `429` via the shared response envelope.
+
+**What the user sees / does next:** a "too many attempts, try again shortly"
+style message on `/admin/invite?token=…`; the invitee waits out the window and
+resubmits.
+
+### Already accepted
+
+**Trigger:** `POST /v1/admin/invites/:token/accept` is called with a token
+whose `admin_invite.accepted_at` is already set — either the invitee already
+completed the flow once, or two accept requests raced and this one lost the
+guarded `UPDATE` (`docs/progress-and-decisions.md` #4/#41; an empty
+`RETURNING` from the guarded update also lands here).
+
+**Response:** `409`, `"already been used"`.
+
+**What the user sees / does next:** the accept page shows the conflict
+message. If the invitee already has an account from an earlier successful
+accept, they sign in instead (`docs/user-stories/auth/sign-in.md`); if this was a
+concurrent double-submit, exactly one of the two requests succeeded and
+created the account.
+
+### Email already has an account
+
+**Trigger:** an admin calls `POST /v1/admin/invites` (`{ email }`) for an
+address that `findUserByEmail` already resolves to an existing user — customer
+or admin.
+
+**Response:** `409`, `"An account already exists for that email."`.
+
+**What the user sees / does next:** the invite form on `/admin/invites` shows
+the conflict message; no invite row is created and no email is sent.
+
+### Forbidden for a non-admin
+
+**Trigger:** a customer session calls `POST /v1/admin/invites`. The route is
+gated `authenticate` + `authorize(ADMIN)`; `authorize` rejects on role
+mismatch (`docs/user-stories.md`'s "Roles" section — `authorize` → `403` on role
+mismatch).
+
+**Response:** `403` via the shared response envelope.
+
+**What the user sees / does next:** unreachable through the web UI — a
+customer session never sees `/admin/invites` (`_authenticated.tsx` keeps a
+customer out of `/admin*`). This is a direct-API-call case only; the customer
+stays on their own pages.
+
+### Too many sends from one IP
+
+**Trigger:** more than `2 × OTP.MAX_ATTEMPTS` calls to `POST /v1/admin/invites`
+from the same IP within a minute.
+
+**Response:** `429` via the shared response envelope. `docs/user-stories/admin/admin-invite.md`
+documents the threshold but not bespoke copy for this case.
+
+**What the user sees / does next:** a "too many attempts, try again shortly"
+style message on `/admin/invites`; the admin waits out the window and
+resubmits.
+
+### Token expired
+
+**Trigger:** `POST /v1/admin/invites/:token/accept` is called after the
+invite's `expires_at` (`ADMIN_INVITE_EXPIRY_HOURS`, 72h from send) has passed,
+and the invite was never accepted.
+
+**Response:** `409`, `"expired"`.
+
+**What the user sees / does next:** the accept page shows the expiry message;
+the invitee has no account and must ask the inviting admin to send a fresh
+invite (`docs/user-stories/admin/admin-invite.md` send step) — there is no
+self-service resend.
+
+### Token not found
+
+**Trigger:** `POST /v1/admin/invites/:token/accept` is called with a token
+that `findAdminInviteByToken` doesn't find at all — no `admin_invite` row
+with that token exists (typo'd link, tampered URL).
+
+**Response:** `404` via the shared response envelope.
+
+**What the user sees / does next:** the accept page shows a not-found style
+error; the invitee has no account and must ask the inviting admin to send a
+fresh invite (`docs/user-stories/admin/admin-invite.md` send step).

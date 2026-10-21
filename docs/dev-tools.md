@@ -18,7 +18,7 @@ Auth is Better Auth email-OTP (`docs/progress-and-decisions.md` #21 — see `doc
 
 ### How it's wired
 
-- `compose.yml` has an `ntfy` service (`binwiederhier/ntfy`), alongside Postgres/api/web/Mailpit. Web UI on `http://localhost:8090`; the api reaches it at `http://ntfy` (`env.NTFY_URL`). The browser's own SSE subscription (`use-dispute-notifications.ts`) goes through the reverse proxy at `/ntfy` (`VITE_NTFY_URL`, `docs/progress-and-decisions.md` #61) rather than ntfy's port directly — same reasoning as the api URL: the client bundle only ever knows the proxy's stable address.
+- `compose.yml` has an `ntfy` service (`binwiederhier/ntfy`), alongside Postgres/api/web/Mailpit. Web UI on `http://localhost:8090`; the api reaches it at `http://ntfy` (`env.NTFY_URL`). The browser's SSE subscription (`use-dispute-notifications.ts`) connects to `http://localhost:8090` directly (`VITE_NTFY_URL`).
 - On a dispute status change (the `POST /v1/admin/disputes/:id/review` **and** `.../resolve` handlers — see `docs/backend-service.md`), `lib/notifier.ts`'s `publishDisputeUpdate` does a fire-and-forget `POST ${NTFY_URL}/dispute-updates-{userId}` with the new status (`UNDER_REVIEW` / `RESOLVED` / `REJECTED`) as the body. Failures are logged, never block or fail the request.
 - Per-user topics, not one shared topic, so one customer's dispute activity isn't visible to another — the same authz principle as everything else in `docs/requirements.md`, applied to the notification channel too.
 - Local dev: subscribe via `curl -s http://localhost:8090/dispute-updates-{userId}/json` or the ntfy web UI to watch events arrive while testing the dispute flow.
@@ -43,7 +43,7 @@ Login is Better Auth email-OTP: every sign-in sends a real, working one-time cod
 
 ### How it's wired
 
-- `compose.yml` has a `transaction-dispute-portal-mailpit` service (`axllent/mailpit`), reachable on the compose network under the alias `mailpit`, with SMTP exposed on host port `1025` and its web UI (port `8025`) reachable through the nginx proxy.
+- `compose.yml` has a `mailpit` service (`axllent/mailpit`): the api sends to `mailpit:1025` (`SMTP_HOST`/`SMTP_PORT`), and the inbox UI is at `http://localhost:8025`.
 - `api/.env` points the api's SMTP client at it: `SMTP_HOST=mailpit`, `SMTP_PORT=1025`, with `SMTP_USER`/`SMTP_PASS` empty — Mailpit accepts unauthenticated mail by default, so dev needs no credentials at all.
 - Every OTP code, new-device alert, and email-change approval the api sends lands in Mailpit instead of a real inbox. Open the web UI to read the caught message and copy the code out during local testing or a demo.
 

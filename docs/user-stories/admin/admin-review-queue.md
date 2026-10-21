@@ -33,4 +33,19 @@ modal (`docs/user-stories/admin/admin-move-to-review.md`,
 `docs/user-stories/admin/admin-resolve-or-reject.md`).
 
 A customer session hitting this endpoint — see
-`docs/user-stories/admin/admin-review-queue-forbidden-non-admin.md`.
+*forbidden for a non-admin* (below).
+
+## Error cases
+
+### Forbidden for a non-admin
+
+**Trigger:** a customer session calls `GET /v1/admin/disputes` (or
+`GET /v1/admin/disputes/summary`). Both routes are gated `authenticate` +
+`authorize(ADMIN)`; `docs/user-stories.md`'s Roles section states this explicitly for the list: "a
+customer session → `403`."
+
+**Response:** `403` via the shared response envelope.
+
+**What the user sees / does next:** unreachable through the web UI — a
+customer session never sees `/admin` (`_authenticated.tsx` keeps a customer
+out of `/admin*`). Direct-API call only.

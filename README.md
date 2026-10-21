@@ -1,52 +1,159 @@
 # Transactions Dispute Portal
 
-Solo submission for an internal promotion evaluation. See `CLAUDE.md` and `docs/requirements.md` for full context; `docs/progress-and-decisions.md` for the "why" behind every non-trivial choice.
+A customer-facing portal where bank customers view their transactions, dispute a charge, and track the dispute until an admin resolves it. Built solo for a Software Engineer II: Full Stack promotion evaluation. Background: `docs/requirements.md`; the "why" behind each choice: `docs/progress-and-decisions.md`.
 
-**Status: backend and web frontend both feature-complete.** The Drizzle schema, Better Auth (email-OTP), env validation, the Fastify request stack (`docs/progress-and-decisions.md` #35), and every backend module are built and verified: `check`, `authentication` (OTP sign-in, a session endpoint for the client, a two-step email change, `docs/progress-and-decisions.md` #46/#50), `transaction`, `dispute` (submit / list / detail / withdraw, `#40`/`#45`), `admin-dispute` (`review → resolve` lifecycle, `#41`), `admin-invite` (invite-only admin signup, `#44`). Plus new-device login alerts, dispute-status notifications over ntfy, deterministic seed/purge, and a 65-test Vitest integration suite running in CI against real Postgres + Mailpit (`#47`). `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy (`#51`) — customer transactions/disputes flow, admin review + invite flow, and account/email-change, all wired to the real API and given a manual browser pass end to end (8 unit tests plus sign-in → dispute → admin-review driven live in Chrome). That pass found and fixed a post-mutation UI staleness bug (`#52`) and a missing-transaction-context gap now closed on every dispute view (`#53`), and the admin review queue was compacted into a table + modal (`#54`). The api's tests now run against their own database, never the dev stack's (`#55`). A second regression pass across both roles closed three more gaps: the transaction page no longer offers to dispute a transaction that already has an open one (it links straight to it) and now shows a transaction's dispute history; and a cross-user 404 renders as a proper not-found page instead of a client crash screen (`#56`). Every list — transactions, disputes, the review queue, invites — shares one search / date-range / column-sort query (`#57`); the review queue floats unresolved disputes to the top by default and has per-status stat cards from their own endpoint (`#58`); a web-inclusive cleanup pass then deduplicated the four list pages behind one generic `<DataList>` and trimmed the post-feature dead code (`#59`). `docs/user-stories.md` walks all thirteen flows end to end, split into `auth`/`admin`/`client`. Deferred backend hardening is catalogued in `docs/progress-and-decisions.md`'s "Deferred / known gaps" section. See `docs/codebase-index.md` for a per-file map.
+**Stack:** TypeScript · Fastify + Drizzle + Postgres (`api`) · TanStack Start (`web`) · zod schemas shared between them (`shared`) · Better Auth (email one-time-code login) · Vitest · pnpm + Turborepo · Docker Compose.
 
-## Local setup
+## Run it
 
-```sh
-docker compose up -d
-docker compose exec transaction-dispute-portal-api \
-  pnpm --filter @transaction-dispute-portal/api db:seed
-```
-
-`docker compose up -d` is the whole stack — Postgres, api, web, Mailpit, ntfy, an nginx reverse proxy, source bind-mounted with `tsx`/`vite` watch. `api/.env`, `web/.env` and `env/development/.env.database` are committed with working local values (fake Postgres password, freshly-generated auth secrets; `docs/progress-and-decisions.md` #34/#42). Migrations run automatically on api start; the `db:seed` line above loads demo data (once).
-
-The app is served under its own local hostname rather than bare `localhost` (`docs/progress-and-decisions.md` #61) — add this line once, then leave it:
+**Prerequisite:** Docker (with Compose v2). Nothing else is needed to run the app.
 
 ```sh
-echo "127.0.0.1 dispute-portal" | sudo tee -a /etc/hosts
+git clone <repo-url> transaction-dispute-portal
+cd transaction-dispute-portal
+
+docker compose up -d --wait           # first run builds images; takes a few minutes
+docker compose exec api pnpm db:seed  # load demo data (re-run any time to reset it)
 ```
 
-- App (web + api, behind an nginx reverse proxy — `docs/progress-and-decisions.md` #61): http://dispute-portal — `/v1/*`, `/healthz`, `/readyz`, `/ntfy/*` route to the api/ntfy containers, everything else to web. Use `dispute-portal`, not `localhost` — `CORS_ORIGIN`/cookies are scoped to it.
-- Mailpit (caught local email): http://localhost:8025
-- ntfy web UI (watch notification topics directly): http://localhost:8090
+The committed `api/.env` and `web/.env` hold working local values (fake secrets, nothing real), so there's no setup step. Migrations run automatically when `api` starts.
 
-The proxy is the only front door for every container-facing port above — `web`, `api`, `mailpit`, and `ntfy` are all `expose`-only, nginx does the routing on `:80`/`:8025`/`:8090`. Only `database`'s `:5432` is still published directly, for `psql`.
+| Open | URL | What it is |
+| --- | --- | --- |
+| **The app** | http://localhost:3000 | Customer + admin portal |
+| **Mailpit** | http://localhost:8025 | Catches every email the app sends. **Your sign-in codes are here.** |
+| ntfy | http://localhost:8090 | Live dispute-status notification server (the app subscribes to it) |
+| API | http://localhost:8080 | The REST API, e.g. http://localhost:8080/healthz |
+| Postgres | `localhost:5432` | `postgres` / `password`, database `transaction-dispute` |
 
-**Logging in:** login is email-OTP (`docs/progress-and-decisions.md` #21) — enter an account's email, then check `http://localhost:8025` for the one-time code. Nothing is really "sent" anywhere: SMTP points at the local Mailpit catcher. Seeded accounts: `thelowlydev@gmail.com` (admin), `customer@example.com` (long history), `newcomer@example.com` (no disputes). To use a real inbox instead, put a real Gmail App Password in `SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` in `api/.env` or an untracked `api/.env.local`.
+Stop with `docker compose down`. Add `-v` to also wipe the database and `node_modules` volumes.
+
+## Signing in
+
+There are no passwords. Enter an account's email, open Mailpit (http://localhost:8025), and type the 6-digit code.
+
+| Account | Role | Use it for |
+| --- | --- | --- |
+| `customer@example.com` | Customer | Long transaction + dispute history |
+| `newcomer@example.com` | Customer | Clean slate, no disputes |
+| `thelowlydev@gmail.com` | Admin | Review queue, resolving disputes, sending admin invites |
+
+## Demo script (~5 min)
+
+1. **Customer:** sign in as `customer@example.com` → **Transactions** → search/sort/filter → open one → **Dispute this transaction**.
+2. In a second browser (or private window), sign in as `thelowlydev@gmail.com` → **Review queue** puts open disputes first → **Review** on the new one → **Move to review**. The customer's tab gets a live toast (via ntfy).
+3. Admin → **Review** again → pick a **Decision** (resolved/rejected) + **Note to the customer** → **Submit decision**. The customer sees the status and note under **Disputes**.
+4. Customer → open another dispute → **Withdraw dispute**.
+5. Admin → **Invitations** → **Send an invite** → the invite link lands in Mailpit → accept it → sign in as the new admin.
+6. Signing in from a new browser sends a "new device" email to Mailpit. Changing your email under **Account** sends an approval link to the *old* address first.
+
+## API endpoints
+
+All JSON. Every response uses one envelope, `{ code, message, data?, errors?, redirectUrl? }`. Lists add `page`, `limit`, `count` (total matches) and `total` (rows on this page). Auth is a session cookie set by `POST /v1/auth/otp/verify`. Full contract and status codes: `docs/backend-service.md`.
+
+**Health** (no auth)
+
+| Method | Path | Does |
+| --- | --- | --- |
+| GET | `/healthz` | Liveness |
+| GET | `/readyz` | Readiness: checks the DB answers |
+
+**Auth**
+
+| Method | Path | Auth | Does |
+| --- | --- | --- | --- |
+| POST | `/v1/auth/otp` | none | Email a sign-in code to `{ email }` (same response whether or not the account exists) |
+| POST | `/v1/auth/otp/verify` | none | Exchange `{ email, otp }` for a session cookie |
+| GET | `/v1/auth/session` | signed in | Who am I (id, email, role) |
+| POST | `/v1/auth/sign-out` | any | End the session |
+| POST | `/v1/auth/change-email` | signed in | Start an email change: approval link goes to the *current* address |
+| POST | `/v1/auth/change-email/confirm` | none | Apply one step of the change with the emailed `{ token }` |
+
+**Customer** (customer session; an admin session gets `403`)
+
+| Method | Path | Does |
+| --- | --- | --- |
+| GET | `/v1/transactions` | Your transactions (paginated, search/date-range/sort) |
+| GET | `/v1/transactions/:transactionId` | One of your transactions (someone else's → `404`) |
+| POST | `/v1/disputes` | Dispute a transaction: `{ transactionId, reason, description }` (already open → `409`) |
+| GET | `/v1/disputes` | Your disputes (filter by `status`, `transaction_id`) |
+| GET | `/v1/disputes/:disputeId` | One of your disputes |
+| POST | `/v1/disputes/:disputeId/withdraw` | Withdraw your own open dispute |
+
+**Admin** (admin session; a customer session gets `403`)
+
+| Method | Path | Does |
+| --- | --- | --- |
+| GET | `/v1/admin/disputes` | Review queue: every customer's disputes, unresolved oldest first |
+| GET | `/v1/admin/disputes/summary` | Count of disputes per status (the stat cards) |
+| POST | `/v1/admin/disputes/:disputeId/review` | `SUBMITTED → UNDER_REVIEW`, notifies the customer |
+| POST | `/v1/admin/disputes/:disputeId/resolve` | `UNDER_REVIEW → RESOLVED \| REJECTED` with `{ resolution, note }`, notifies the customer |
+| GET | `/v1/admin/invites` | Invites you've sent |
+| POST | `/v1/admin/invites` | Invite a new admin by `{ email }` |
+| POST | `/v1/admin/invites/:token/accept` | No auth: invitee sets `{ name }`, creating the admin account |
+
+List endpoints share the query params `page`, `limit` (≤ 100), `search`, `from`/`to` (`YYYY-MM-DD`), `sort` (a per-endpoint whitelist) and `order` (`asc`/`desc`).
+
+**Dispute lifecycle:** `SUBMITTED → UNDER_REVIEW → RESOLVED | REJECTED`. The customer can `WITHDRAW` from either open state. It's forward-only, enforced in SQL, with one open dispute per transaction and an audit row for every transition.
+
+## Tests and checks
+
+These run on the host, so you'll need Node 24 (`.nvmrc`) and pnpm (`corepack enable`). Keep the compose stack up: the api tests use its Postgres (in a separate `transaction-dispute-test` database, so your demo data is untouched) and read sign-in codes from its Mailpit.
+
+```sh
+pnpm install
+pnpm lint && pnpm typecheck && pnpm build
+pnpm test        # 65 api integration tests (real OTP flow, real DB) + 8 web unit tests
+```
+
+Don't run `pnpm test` *inside* the `api` container. Its `DATABASE_URL` points at the dev database, which the suite would reset.
+
+CI (`.github/workflows/build.yml`) runs the same checks on every push, plus a smoke test that runs `docker compose up`, hits `/healthz` and `/`, and seeds.
+
+## Useful commands
+
+```sh
+docker compose logs -f api               # follow api logs (also: web, database, mailpit, ntfy)
+docker compose exec api pnpm db:seed     # reset demo data
+docker compose exec api pnpm db:purge    # empty every table, keep the schema
+docker compose restart api               # restart one service (source changes hot-reload; no restart needed)
+docker compose up -d --force-recreate    # needed after editing a .env file (restart doesn't re-read it)
+docker compose down -v                   # full reset: database + node_modules volumes
+```
+
+## Troubleshooting
+
+- **`address already in use` on startup.** Something else on your machine holds one of 3000, 8080, 5432, 1025, 8025 or 8090. Stop it, or change the left-hand side of that service's `ports:` in `compose.yml`. If it's 3000 or 8080, also update `CORS_ORIGIN`/`FRONTEND_URL` in `api/.env` and `VITE_API_URL` in `web/.env` to match.
+- **No sign-in code arrives.** Codes never go to a real inbox. Look in Mailpit at http://localhost:8025.
+- **First page load is slow.** Vite bundles dependencies on the first request after a fresh `up`. Later loads are fast.
+- **Stuck after pulling new dependencies.** Run `docker compose down -v && docker compose up -d --build --wait`, then seed again.
 
 ## Performance
 
-One number, measured on the dev stack (`docker compose up`, `tsx` watch, single machine), against the seeded dataset (~4.3k transactions):
+One measurement on the dev stack (watch mode, single machine, seeded data): `autocannon -c 20 -d 20` against `GET /v1/transactions?limit=20` (authenticated) gives **~230 req/s, p50 79 ms, p99 223 ms**. `GET /readyz` (a DB round trip with no session) does ~3,700 req/s, so the ceiling is Better Auth's per-request session lookup, not Postgres or Fastify. The fix is in `docs/infrastructure.md`.
+
+## Repo layout
 
 ```
-autocannon -c 20 -d 20   GET /v1/transactions?limit=20   (authenticated, paginated, indexed)
-  → ~230 req/s   p50 79 ms   p97.5 171 ms   p99 223 ms
+api/      Fastify API: modules/<name>/{route,service,type}.ts, database/{schema,repository,migrations}, test/
+web/      TanStack Start app: routes/, api/ (typed client), components/
+shared/   zod schemas, types and constants used by both
+docs/     design docs (below)
+compose.yml, */Dockerfile   the dev stack
 ```
-
-Throughput plateaus near **250 req/s** as concurrency rises (latency grows, RPS doesn't). For contrast, `GET /readyz` — a real DB round-trip with no session — sustains **~3,700 req/s at p99 15 ms** on the same stack. So Postgres and Fastify are not the ceiling: it's Better Auth's per-request session lookup on every authenticated route. The scaling lever (cache the session check, or move to stateless JWT sessions) is noted in `docs/infrastructure.md`; a production build (no watch/bind-mount, compiled output) would also lift the floor.
-
-## Going to production
-
-This repo is development-only by design (`docs/progress-and-decisions.md` #42) — one `compose.yml`, one dev `Dockerfile` per package, no live deployment. **`docs/production-runbook.md`** is the step-by-step for making it production-ready: multi-stage images, orchestrator-injected secrets, migrations as a gated pre-deploy step, a registry-push + gated-deploy pipeline, and k8s manifests with the probes wired to `/healthz` + `/readyz`.
-
-## CI
-
-`.github/workflows/build.yml` runs on every push and PR. Job `check`: `lint` / `typecheck` / `build`, then `migrate` and `test` against `postgres:18` + `mailpit` service containers (the api's 65-test integration suite drives the real OTP flow, no forged sessions; the web package runs its own 8 unit tests in the same `test` step). Job `stack`: `docker compose up -d --build --wait`, hits `/healthz`, runs `db:seed` — proving the clean-clone path. No deploy pipeline (that's `docs/production-runbook.md`).
 
 ## Docs
 
-Start with `CLAUDE.md`, then `docs/progress-and-decisions.md` for the "why did you..." log, `docs/codebase-index.md` for a per-file map of the repo, and `docs/user-stories.md` for every user-facing flow walked end to end.
+| Doc | Read it for |
+| --- | --- |
+| `docs/requirements.md` | The brief and what must be true |
+| `docs/progress-and-decisions.md` | Status, definition of done, and every "why did you..." decision |
+| `docs/backend-service.md` | API contract, auth/OTP mechanics, lifecycle enforcement |
+| `docs/frontend-service.md` | Web architecture: route gating, loaders, cache refresh, live toasts |
+| `docs/infrastructure.md` | Container topology, data model, request-flow diagram |
+| `docs/user-stories.md` | Every user flow and error case, end to end |
+| `docs/dev-tools.md` | Mailpit and ntfy: why, and what replaces them in production |
+| `docs/production-runbook.md` | How you'd actually ship this (images, secrets, pipeline, k8s) |
+| `docs/codebase-index.md` | File-by-file map |
+
+This repo is dev-only by design. There's no deployment; `docs/production-runbook.md` covers what production would add.
