@@ -41,7 +41,7 @@ interface ListControlsProps<TStatus extends string> {
 	statusOptions?: readonly TStatus[];
 	/** Renders the amount range slider (sent as `min_amount_cents` / `max_amount_cents`). */
 	showAmountRange?: boolean;
-	/** Apply a filter patch — merged into the route search, resetting to page 1. */
+	/** Apply a filter patch — merged into the route search, back to the first page. */
 	onApply: (filters: ListFilters<TStatus>) => void;
 	/** Drop every filter. */
 	onClear: () => void;

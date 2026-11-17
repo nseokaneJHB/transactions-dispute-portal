@@ -1,0 +1,260 @@
+== P01 admin queue, first page
+Limit  (cost=1.16..9.50 rows=11 width=238)
+  ->  Nested Loop  (cost=1.16..796160.09 rows=1050000 width=238)
+        ->  Nested Loop  (cost=0.86..746585.99 rows=1050000 width=176)
+              ->  Index Scan using dispute_status_created_idx on dispute  (cost=0.43..107010.99 rows=1050000 width=147)
+              ->  Index Scan using transaction_pkey on transaction  (cost=0.43..0.61 rows=1 width=45)
+                    Index Cond: (id = dispute.transaction_id)
+        ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+              Cache Key: dispute.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user"  (cost=0.29..0.31 rows=1 width=46)
+                    Index Cond: (id = dispute.user_id)
+== P02 admin queue, row 10,000
+Limit  (cost=1.16..9.82 rows=11 width=238)
+  ->  Nested Loop  (cost=1.16..787070.95 rows=999040 width=238)
+        ->  Nested Loop  (cost=0.86..739531.39 rows=999040 width=176)
+              ->  Index Scan using dispute_status_created_idx on dispute  (cost=0.43..122760.99 rows=999040 width=147)
+                    Index Cond: (ROW(status, created_at) >= ROW('SUBMITTED'::"disputeStatus", '2025-04-13 02:40:29.979718+00'::timestamp with time zone))
+                    Filter: ((ROW(status, created_at) > ROW('SUBMITTED'::"disputeStatus", '2025-04-13 02:40:29.979718+00'::timestamp with time zone)) OR ((status = 'SUBMITTED'::"disputeStatus") AND (created_at = '2025-04-13 02:40:29.979718+00'::timestamp with time zone) AND (id < '01a1eb72-37b3-776d-a322-34b0d7bcd4f7'::uuid)))
+              ->  Index Scan using transaction_pkey on transaction  (cost=0.43..0.62 rows=1 width=45)
+                    Index Cond: (id = dispute.transaction_id)
+        ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+              Cache Key: dispute.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user"  (cost=0.29..0.31 rows=1 width=46)
+                    Index Cond: (id = dispute.user_id)
+== P03 admin queue, row 500,000
+Limit  (cost=1.16..15.33 rows=11 width=238)
+  ->  Nested Loop  (cost=1.16..473768.33 rows=367714 width=238)
+        ->  Nested Loop  (cost=0.86..451345.50 rows=367714 width=176)
+              ->  Index Scan using dispute_status_created_idx on dispute  (cost=0.43..117093.48 rows=367714 width=147)
+                    Index Cond: (ROW(status, created_at) >= ROW('RESOLVED'::"disputeStatus", '2026-05-03 14:33:20.010792+00'::timestamp with time zone))
+                    Filter: ((ROW(status, created_at) > ROW('RESOLVED'::"disputeStatus", '2026-05-03 14:33:20.010792+00'::timestamp with time zone)) OR ((status = 'RESOLVED'::"disputeStatus") AND (created_at = '2026-05-03 14:33:20.010792+00'::timestamp with time zone) AND (id < '01a1eb72-4f37-7008-840b-d674d0dd00e4'::uuid)))
+              ->  Index Scan using transaction_pkey on transaction  (cost=0.43..0.91 rows=1 width=45)
+                    Index Cond: (id = dispute.transaction_id)
+        ->  Memoize  (cost=0.30..0.33 rows=1 width=46)
+              Cache Key: dispute.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user"  (cost=0.29..0.32 rows=1 width=46)
+                    Index Cond: (id = dispute.user_id)
+== P04 admin queue status=SUBMITTED, first page
+Limit  (cost=1.16..57.55 rows=11 width=238)
+  ->  Nested Loop  (cost=1.16..261272.61 rows=50960 width=238)
+        ->  Nested Loop  (cost=0.86..251243.93 rows=50960 width=176)
+              ->  Index Scan using dispute_status_created_idx on dispute  (cost=0.43..66987.33 rows=50960 width=147)
+                    Index Cond: (status = 'SUBMITTED'::"disputeStatus")
+              ->  Index Scan using transaction_pkey on transaction  (cost=0.43..3.62 rows=1 width=45)
+                    Index Cond: (id = dispute.transaction_id)
+        ->  Memoize  (cost=0.30..0.38 rows=1 width=46)
+              Cache Key: dispute.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user"  (cost=0.29..0.37 rows=1 width=46)
+                    Index Cond: (id = dispute.user_id)
+== P05 admin search 'merchant 42', first page
+Limit  (cost=1.16..413.72 rows=11 width=238)
+  ->  Nested Loop  (cost=1.16..801730.73 rows=21376 width=238)
+        Join Filter: ((dispute.description ~~* '%merchant 42%'::text) OR ((transaction.merchant_name)::text ~~* '%merchant 42%'::text) OR (("user".name)::text ~~* '%merchant 42%'::text) OR (("user".email)::text ~~* '%merchant 42%'::text))
+        ->  Nested Loop  (cost=0.73..140835.09 rows=1050000 width=177)
+              ->  Index Scan using dispute_status_created_idx on dispute  (cost=0.43..107010.99 rows=1050000 width=147)
+              ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+                    Cache Key: dispute.user_id
+                    Cache Mode: logical
+                    ->  Index Scan using user_pkey on "user"  (cost=0.29..0.31 rows=1 width=46)
+                          Index Cond: (id = dispute.user_id)
+        ->  Index Scan using transaction_pkey on transaction  (cost=0.43..0.61 rows=1 width=45)
+              Index Cond: (id = dispute.transaction_id)
+== P06 heavy customer transactions, first page
+Limit  (cost=0.99..7.53 rows=11 width=93)
+  ->  Incremental Sort  (cost=0.99..120335.33 rows=202400 width=93)
+        Sort Key: transacted_at DESC, id DESC
+        Presorted Key: transacted_at
+        ->  Index Scan Backward using transaction_user_transacted_idx on transaction  (cost=0.43..111227.33 rows=202400 width=93)
+              Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== P07 heavy customer transactions, row 10,000
+Limit  (cost=1.02..7.93 rows=11 width=93)
+  ->  Incremental Sort  (cost=1.02..120779.01 rows=192315 width=93)
+        Sort Key: transacted_at DESC, id DESC
+        Presorted Key: transacted_at
+        ->  Index Scan Backward using transaction_user_transacted_idx on transaction  (cost=0.43..112124.84 rows=192315 width=93)
+              Index Cond: ((user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid) AND (transacted_at <= '2026-10-12 07:47:00.733123+00'::timestamp with time zone))
+              Filter: (ROW(transacted_at, id) < ROW('2026-10-12 07:47:00.733123+00'::timestamp with time zone, '01a1eb71-f9a8-7c09-9674-68f669eb5ce5'::uuid))
+== P08 heavy customer transactions, row 100,000
+Limit  (cost=1.49..13.59 rows=11 width=93)
+  ->  Incremental Sort  (cost=1.49..111032.43 rows=101000 width=93)
+        Sort Key: transacted_at DESC, id DESC
+        Presorted Key: transacted_at
+        ->  Index Scan Backward using transaction_user_transacted_idx on transaction  (cost=0.43..106487.43 rows=101000 width=93)
+              Index Cond: ((user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid) AND (transacted_at <= '2025-11-16 16:14:51.366582+00'::timestamp with time zone))
+              Filter: (ROW(transacted_at, id) < ROW('2025-11-16 16:14:51.366582+00'::timestamp with time zone, '01a1eb72-0005-79b9-a34b-428cb495a44f'::uuid))
+== P09 heavy customer disputes, first page
+Limit  (cost=0.86..51.62 rows=11 width=176)
+  ->  Nested Loop  (cost=0.86..225493.37 rows=48860 width=176)
+        ->  Index Scan Backward using dispute_user_created_idx on dispute  (cost=0.43..44139.92 rows=48860 width=115)
+              Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+        ->  Index Scan using transaction_pkey on transaction  (cost=0.43..3.70 rows=1 width=45)
+              Index Cond: (id = dispute.transaction_id)
+== P10 heavy customer disputes, row 10,000
+Limit  (cost=0.86..59.28 rows=11 width=176)
+  ->  Nested Loop  (cost=0.86..207928.92 rows=39152 width=176)
+        ->  Index Scan Backward using dispute_user_created_idx on dispute  (cost=0.43..43724.88 rows=39152 width=115)
+              Index Cond: ((user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid) AND (ROW(created_at, id) < ROW('2026-06-25 23:23:15.44193+00'::timestamp with time zone, '01a1eb72-f32f-72e6-84e4-7e30d13ac774'::uuid)))
+        ->  Index Scan using transaction_pkey on transaction  (cost=0.43..4.18 rows=1 width=45)
+              Index Cond: (id = dispute.transaction_id)
+== P11 heavy customer disputes, row 40,000
+Limit  (cost=0.86..97.04 rows=11 width=176)
+  ->  Nested Loop  (cost=0.86..85039.42 rows=9726 width=176)
+        ->  Index Scan Backward using dispute_user_created_idx on dispute  (cost=0.43..18849.78 rows=9726 width=115)
+              Index Cond: ((user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid) AND (ROW(created_at, id) < ROW('2025-04-11 19:14:35.545366+00'::timestamp with time zone, '01a1eb72-f43f-7f88-822a-ce40f53e081c'::uuid)))
+        ->  Index Scan using transaction_pkey on transaction  (cost=0.43..6.80 rows=1 width=45)
+              Index Cond: (id = dispute.transaction_id)
+== P12 normal customer transactions, first page
+Limit  (cost=3.98..42.62 rows=11 width=93)
+  ->  Incremental Sort  (cost=3.98..165.55 rows=46 width=93)
+        Sort Key: transacted_at DESC, id DESC
+        Presorted Key: transacted_at
+        ->  Index Scan Backward using transaction_user_transacted_idx on transaction  (cost=0.43..163.48 rows=46 width=93)
+              Index Cond: (user_id = '01a1eb70-f26b-7ac6-8646-40834fe6c228'::uuid)
+== P13 normal customer disputes, first page
+Limit  (cost=0.86..122.02 rows=11 width=176)
+  ->  Nested Loop  (cost=0.86..452.48 rows=41 width=176)
+        ->  Index Scan Backward using dispute_user_created_idx on dispute  (cost=0.43..105.72 rows=41 width=115)
+              Index Cond: (user_id = '01a1eb70-f26b-7ac6-8646-40834fe6c228'::uuid)
+        ->  Index Scan using transaction_pkey on transaction  (cost=0.43..8.45 rows=1 width=45)
+              Index Cond: (id = dispute.transaction_id)
+== S01 admin sort=amount desc, first page
+Limit  (cost=4.45..18.30 rows=11 width=238)
+  ->  Incremental Sort  (cost=4.45..1322479.12 rows=1050000 width=238)
+        Sort Key: transaction.amount_cents DESC, dispute.id DESC
+        Presorted Key: transaction.amount_cents
+        ->  Nested Loop  (cost=1.16..1294048.53 rows=1050000 width=238)
+              ->  Nested Loop  (cost=0.86..1249724.42 rows=1050000 width=176)
+                    ->  Index Scan Backward using transaction_amount_idx on transaction  (cost=0.43..163692.42 rows=2200000 width=45)
+                    ->  Index Scan using dispute_transaction_id_idx on dispute  (cost=0.43..0.48 rows=1 width=147)
+                          Index Cond: (transaction_id = transaction.id)
+              ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+                    Cache Key: dispute.user_id
+                    Cache Mode: logical
+                    ->  Index Scan using user_pkey on "user"  (cost=0.29..0.31 rows=1 width=46)
+                          Index Cond: (id = dispute.user_id)
+== S02 admin sort=amount desc, row 10,000
+Limit  (cost=4.46..18.63 rows=11 width=238)
+  ->  Incremental Sort  (cost=4.46..1327956.62 rows=1030675 width=238)
+        Sort Key: transaction.amount_cents DESC, dispute.id DESC
+        Presorted Key: transaction.amount_cents
+        ->  Nested Loop  (cost=1.16..1300041.71 rows=1030675 width=238)
+              ->  Nested Loop  (cost=0.86..1256393.98 rows=1030675 width=176)
+                    ->  Index Scan Backward using transaction_amount_idx on transaction  (cost=0.43..168716.54 rows=2179664 width=45)
+                          Index Cond: (amount_cents <= '495221'::bigint)
+                    ->  Index Scan using dispute_transaction_id_idx on dispute  (cost=0.43..0.49 rows=1 width=147)
+                          Index Cond: (transaction_id = transaction.id)
+                          Filter: (ROW(transaction.amount_cents, id) < ROW('495221'::bigint, '01a1eb72-255e-7b0d-b7d8-ff4f0b8a9227'::uuid))
+              ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+                    Cache Key: dispute.user_id
+                    Cache Mode: logical
+                    ->  Index Scan using user_pkey on "user"  (cost=0.29..0.31 rows=1 width=46)
+                          Index Cond: (id = dispute.user_id)
+== S03 admin sort=amount desc, row 500,000
+Limit  (cost=3.84..33.78 rows=11 width=238)
+  ->  Incremental Sort  (cost=3.84..794134.92 rows=291814 width=238)
+        Sort Key: transaction.amount_cents DESC, dispute.id DESC
+        Presorted Key: transaction.amount_cents
+        ->  Nested Loop  (cost=1.16..781003.29 rows=291814 width=238)
+              ->  Nested Loop  (cost=0.86..763215.49 rows=291814 width=176)
+                    ->  Index Scan Backward using transaction_amount_idx on transaction  (cost=0.43..144676.87 rows=1159797 width=45)
+                          Index Cond: (amount_cents <= '262262'::bigint)
+                    ->  Index Scan using dispute_transaction_id_idx on dispute  (cost=0.43..0.52 rows=1 width=147)
+                          Index Cond: (transaction_id = transaction.id)
+                          Filter: (ROW(transaction.amount_cents, id) < ROW('262262'::bigint, '01a1eb72-1b09-7417-90e0-045b633bf12b'::uuid))
+              ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+                    Cache Key: dispute.user_id
+                    Cache Mode: logical
+                    ->  Index Scan using user_pkey on "user"  (cost=0.29..0.31 rows=1 width=46)
+                          Index Cond: (id = dispute.user_id)
+== S04 admin sort=customer asc, first page
+Limit  (cost=18.17..27.24 rows=11 width=238)
+  ->  Incremental Sort  (cost=18.17..865332.89 rows=1050000 width=238)
+        Sort Key: "user".name, dispute.id
+        Presorted Key: "user".name
+        ->  Nested Loop  (cost=1.15..828148.36 rows=1050000 width=238)
+              ->  Nested Loop  (cost=0.72..183323.36 rows=1050000 width=177)
+                    ->  Index Scan using user_name_idx on "user"  (cost=0.29..3789.75 rows=50001 width=46)
+                    ->  Index Scan using dispute_user_created_idx on dispute  (cost=0.43..3.16 rows=43 width=147)
+                          Index Cond: (user_id = "user".id)
+              ->  Index Scan using transaction_pkey on transaction  (cost=0.43..0.61 rows=1 width=45)
+                    Index Cond: (id = dispute.transaction_id)
+== S05 admin sort=customer asc, row 10,000
+Limit  (cost=18.10..27.13 rows=11 width=238)
+  ->  Incremental Sort  (cost=18.10..861694.05 rows=1049979 width=238)
+        Sort Key: "user".name, dispute.id
+        Presorted Key: "user".name
+        ->  Nested Loop  (cost=1.15..824510.39 rows=1049979 width=238)
+              ->  Nested Loop  (cost=0.72..179698.29 rows=1049979 width=177)
+                    ->  Index Scan using user_name_idx on "user"  (cost=0.29..3914.75 rows=50001 width=46)
+                          Index Cond: ((name)::text >= 'Heavy Account'::text)
+                    ->  Index Scan using dispute_user_created_idx on dispute  (cost=0.43..3.38 rows=14 width=147)
+                          Index Cond: (user_id = "user".id)
+                          Filter: (ROW(("user".name)::text, id) > ROW('Heavy Account'::text, '01a1eb72-f428-7795-ad29-717908a634af'::uuid))
+              ->  Index Scan using transaction_pkey on transaction  (cost=0.43..0.61 rows=1 width=45)
+                    Index Cond: (id = dispute.transaction_id)
+== S06 admin sort=status asc, first page
+Limit  (cost=1.16..9.39 rows=11 width=238)
+  ->  Nested Loop  (cost=1.16..786302.09 rows=1050000 width=238)
+        ->  Nested Loop  (cost=0.86..741977.99 rows=1050000 width=176)
+              ->  Index Scan using dispute_status_id_idx on dispute  (cost=0.43..102402.99 rows=1050000 width=147)
+              ->  Index Scan using transaction_pkey on transaction  (cost=0.43..0.61 rows=1 width=45)
+                    Index Cond: (id = dispute.transaction_id)
+        ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+              Cache Key: dispute.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user"  (cost=0.29..0.31 rows=1 width=46)
+                    Index Cond: (id = dispute.user_id)
+== S07 admin sort=status asc, row 10,000
+Limit  (cost=1.16..9.55 rows=11 width=238)
+  ->  Nested Loop  (cost=1.16..762393.93 rows=999040 width=238)
+        ->  Nested Loop  (cost=0.86..719849.57 rows=999040 width=176)
+              ->  Index Scan using dispute_status_id_idx on dispute  (cost=0.43..103079.17 rows=999040 width=147)
+                    Index Cond: (ROW(status, id) > ROW('SUBMITTED'::"disputeStatus", '01a1eb72-21bd-7ac3-8295-47112dedb5ff'::uuid))
+              ->  Index Scan using transaction_pkey on transaction  (cost=0.43..0.62 rows=1 width=45)
+                    Index Cond: (id = dispute.transaction_id)
+        ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+              Cache Key: dispute.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user"  (cost=0.29..0.31 rows=1 width=46)
+                    Index Cond: (id = dispute.user_id)
+== S08 heavy customer transactions sort=amount asc, first page
+Limit  (cost=1.48..11.21 rows=11 width=93)
+  ->  Incremental Sort  (cost=1.48..178991.76 rows=202400 width=93)
+        Sort Key: amount_cents, id
+        Presorted Key: amount_cents
+        ->  Index Scan using transaction_amount_idx on transaction  (cost=0.43..171216.42 rows=202400 width=93)
+              Filter: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== S09 heavy customer transactions sort=amount asc, row 10,000
+Limit  (cost=1.61..12.57 rows=11 width=93)
+  ->  Incremental Sort  (cost=1.61..191615.16 rows=192212 width=93)
+        Sort Key: amount_cents, id
+        Presorted Key: amount_cents
+        ->  Index Scan using transaction_amount_idx on transaction  (cost=0.43..184174.07 rows=192212 width=93)
+              Index Cond: (amount_cents >= '24691'::bigint)
+              Filter: ((user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid) AND (ROW(amount_cents, id) > ROW('24691'::bigint, '01a1eb71-fd9c-71b7-a43e-332be1f8d515'::uuid)))
+== S10 heavy customer disputes sort=merchant asc, first page
+Limit  (cost=251.19..532.92 rows=11 width=176)
+  ->  Incremental Sort  (cost=251.19..1251634.25 rows=48860 width=176)
+        Sort Key: transaction.merchant_name, dispute.id
+        Presorted Key: transaction.merchant_name
+        ->  Nested Loop  (cost=0.86..1250119.93 rows=48860 width=176)
+              ->  Index Scan using transaction_merchant_idx on transaction  (cost=0.43..158343.63 rows=2200000 width=45)
+              ->  Index Scan using dispute_transaction_id_idx on dispute  (cost=0.43..0.49 rows=1 width=115)
+                    Index Cond: (transaction_id = transaction.id)
+                    Filter: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== S11 heavy customer disputes sort=merchant asc, row 10,000
+Limit  (cost=211.70..583.00 rows=11 width=176)
+  ->  Incremental Sort  (cost=211.70..1054059.64 rows=31221 width=176)
+        Sort Key: transaction.merchant_name, dispute.id
+        Presorted Key: transaction.merchant_name
+        ->  Nested Loop  (cost=0.86..1053156.79 rows=31221 width=176)
+              ->  Index Scan using transaction_merchant_idx on transaction  (cost=0.43..154507.96 rows=1758834 width=45)
+                    Index Cond: ((merchant_name)::text >= 'Merchant 1897'::text)
+              ->  Index Scan using dispute_transaction_id_idx on dispute  (cost=0.43..0.50 rows=1 width=115)
+                    Index Cond: (transaction_id = transaction.id)
+                    Filter: ((user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid) AND (ROW((transaction.merchant_name)::text, id) > ROW('Merchant 1897'::text, '01a1eb72-f67f-76bc-9e7c-b817d052a32a'::uuid)))

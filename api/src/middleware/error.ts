@@ -25,7 +25,6 @@ const CONFLICT_MESSAGE: Record<string, string> = {
 	dispute_open_per_transaction_uq_idx:
 		"This transaction already has an open dispute.",
 	user_email_uq_idx: "An account already exists for that email.",
-	user_email_unique: "An account already exists for that email.",
 	admin_invite_pending_per_email_uq_idx:
 		"An invite is already pending for that email.",
 };

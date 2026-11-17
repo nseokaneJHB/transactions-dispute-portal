@@ -34,7 +34,6 @@ export const DisputeAuditLogModel = pgTable(
 	(table) => [
 		index("dispute_audit_log_actor_id_idx").on(table.actor_id),
 		index("dispute_audit_log_dispute_id_idx").on(table.dispute_id),
-		index("dispute_audit_log_created_at_idx").on(table.created_at),
 	],
 );
 

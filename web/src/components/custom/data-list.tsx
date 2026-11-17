@@ -25,8 +25,9 @@ export interface ListSearch<
 	TStatus extends string = string,
 	TSort extends string = string,
 > {
-	page: number;
 	limit: number;
+	/** The `next_cursor` / `prev_cursor` (or `last`) the current page was reached by; dropped whenever the filters or sort change. Kept in the URL, so Back and reload return to the same page. */
+	cursor?: string;
 	search?: string;
 	from?: string;
 	to?: string;
@@ -53,7 +54,11 @@ interface DataListProps<
 	TStatus extends string,
 	TSort extends string,
 > {
-	result: { data: TRow[]; page: number; limit: number; count: number };
+	result: {
+		data: TRow[];
+		next_cursor: string | null;
+		prev_cursor: string | null;
+	};
 	search: ListSearch<TStatus, TSort>;
 	/** Write the next search params back to the route. */
 	onSearchChange: (next: ListSearch<TStatus, TSort>) => void;
@@ -91,13 +96,17 @@ export const DataList = <
 	showAmountRange,
 	emptyState,
 }: DataListProps<TRow, TStatus, TSort>) => {
-	const { data, page, limit, count } = result;
+	const { data, next_cursor, prev_cursor } = result;
 
 	const applyFilters = (filters: ListFilters<TStatus>) =>
-		onSearchChange({ ...search, page: 1, ...filters });
+		onSearchChange({ ...search, cursor: undefined, ...filters });
 
 	const sortBy = (column: TSort) =>
-		onSearchChange({ ...search, page: 1, ...nextSort(search, column) });
+		onSearchChange({
+			...search,
+			cursor: undefined,
+			...nextSort(search, column),
+		});
 
 	return (
 		<div className="flex flex-col gap-5">
@@ -154,10 +163,13 @@ export const DataList = <
 			)}
 
 			<Pagination
-				page={page}
-				limit={limit}
-				count={count}
-				onPageChange={(next) => onSearchChange({ ...search, page: next })}
+				cursor={search.cursor}
+				nextCursor={next_cursor}
+				prevCursor={prev_cursor}
+				shown={data.length}
+				limit={search.limit}
+				onCursorChange={(cursor) => onSearchChange({ ...search, cursor })}
+				onLimitChange={(limit) => onSearchChange({ ...search, limit })}
 			/>
 		</div>
 	);

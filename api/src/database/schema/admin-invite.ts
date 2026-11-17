@@ -15,7 +15,7 @@ export const AdminInviteModel = pgTable(
 	{
 		id: uuid("id").primaryKey().default(sql`uuidv7()`),
 		email: varchar("email", { length: 255 }).notNull(),
-		token: varchar("token", { length: 255 }).notNull().unique(),
+		token: varchar("token", { length: 255 }).notNull(),
 		expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
 		accepted_at: timestamp("accepted_at", { withTimezone: true }),
 
@@ -32,9 +32,7 @@ export const AdminInviteModel = pgTable(
 			.references(() => UserModel.id, { onDelete: "cascade" }),
 	},
 	(table) => [
-		index("admin_invite_email_idx").on(table.email),
 		index("admin_invite_invited_by_idx").on(table.invited_by),
-		index("admin_invite_updated_idx").on(table.updated_at),
 
 		uniqueIndex("admin_invite_token_uq_idx").on(table.token),
 

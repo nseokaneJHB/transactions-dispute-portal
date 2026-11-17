@@ -51,7 +51,7 @@ There are no passwords. Enter an account's email, open Mailpit (http://localhost
 
 ## API endpoints
 
-All JSON. Every response uses one envelope, `{ code, message, data?, errors?, redirectUrl? }`. Lists add `page`, `limit`, `count` (total matches) and `total` (rows on this page). Auth is a session cookie set by `POST /v1/auth/otp/verify`. Full contract and status codes: `docs/backend-service.md`.
+All JSON. Every response uses one envelope, `{ code, message, data?, errors?, redirectUrl? }`. Lists add `limit`, `total` (rows on this page) and `next_cursor` / `prev_cursor`. Auth is a session cookie set by `POST /v1/auth/otp/verify`. Full contract and status codes: `docs/backend-service.md`.
 
 **Health** (no auth)
 
@@ -94,7 +94,7 @@ All JSON. Every response uses one envelope, `{ code, message, data?, errors?, re
 | POST | `/v1/admin/invites` | Invite a new admin by `{ email }` |
 | POST | `/v1/admin/invites/:token/accept` | No auth: invitee sets `{ name }`, creating the admin account |
 
-List endpoints share the query params `page`, `limit` (≤ 100), `search`, `from`/`to` (`YYYY-MM-DD`), `sort` (a per-endpoint whitelist) and `order` (`asc`/`desc`). Transactions, disputes and the review queue also take `min_amount_cents` / `max_amount_cents` (inclusive, ZAR cents; set from the amount slider in the UI's Filters modal).
+List endpoints share the query params `limit` (≤ 100), `cursor` (a `next_cursor` / `prev_cursor` from the previous response, or `last`), `search`, `from`/`to` (`YYYY-MM-DD`), `sort` (a per-endpoint whitelist) and `order` (`asc`/`desc`). Transactions, disputes and the review queue also take `min_amount_cents` / `max_amount_cents` (inclusive, ZAR cents; set from the amount slider in the UI's Filters modal).
 
 **Dispute lifecycle:** `SUBMITTED → UNDER_REVIEW → RESOLVED | REJECTED`. The customer can `WITHDRAW` from either open state. It's forward-only, enforced in SQL, with one open dispute per transaction and an audit row for every transition.
 
@@ -105,7 +105,7 @@ These run on the host. Keep the compose stack up: the api tests use its Postgres
 ```sh
 pnpm install
 pnpm lint && pnpm typecheck && pnpm build
-pnpm test        # 71 api integration tests (real OTP flow, real DB) + 12 web unit tests
+pnpm test        # 89 api integration tests (real OTP flow, real DB) + 12 web unit tests
 ```
 
 Don't run `pnpm test` *inside* the `api` container. Its `DATABASE_URL` points at the dev database, which the suite would reset.
@@ -139,6 +139,8 @@ Source changes hot-reload without a restart. After editing a `.env` file, run `d
 
 One measurement on the dev stack (watch mode, single machine, seeded data): `autocannon -c 20 -d 20` against `GET /v1/transactions?limit=20` (authenticated) gives **~230 req/s, p50 79 ms, p99 223 ms**. `GET /readyz` (a DB round trip with no session) does ~3,700 req/s, so the ceiling is Better Auth's per-request session lookup, not Postgres or Fastify. The fix is in `docs/infrastructure.md`.
 
+List queries at scale (2.2M transactions, 1.05M disputes): every list page, at any depth and on any sort, is an index seek of about 0.3–3 ms. Before the rework, a deep admin-queue page took 1.8 s and every admin request paid a 450 ms count. The before / after / current numbers, method and scripts are in `docs/list-query-performance.md`.
+
 ## Repo layout
 
 ```
@@ -161,6 +163,8 @@ compose.yml, */Dockerfile   the dev stack
 | `docs/user-stories.md` | Every user flow and error case, end to end |
 | `docs/dev-tools.md` | Mailpit and ntfy: why, and what replaces them in production |
 | `docs/production-runbook.md` | How you'd actually ship this (images, secrets, pipeline, k8s) |
+| `docs/list-query-performance.md` | Measured evidence for the list-query rework: before, after the index refactor, and now |
+| `docs/presentation/engineering-exchange.md` | Engineering Exchange deck: the pagination evidence, TanStack, Drizzle, HTTP/2, Zod contracts, npm supply chain, Next.js vs this stack (Marp markdown) |
 | `docs/codebase-index.md` | File-by-file map |
 
 This repo is dev-only by design. There's no deployment; `docs/production-runbook.md` covers what production would add.

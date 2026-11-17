@@ -25,7 +25,6 @@ export const VerificationModel = pgTable(
 			.$onUpdate(() => sql`now()`),
 	},
 	(table) => [
-		index("verification_updated_idx").on(table.updated_at),
 		index("verification_identifier_idx").on(table.identifier),
 	],
 );

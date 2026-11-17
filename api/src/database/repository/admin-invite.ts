@@ -1,7 +1,7 @@
 import {
 	and,
-	desc,
 	eq,
+	getTableColumns,
 	gt,
 	isNotNull,
 	isNull,
@@ -14,6 +14,7 @@ import {
 import {
 	ADMIN_INVITE_SORT,
 	ADMIN_INVITE_STATUS,
+	ORDER_DIRECTION,
 } from "@transaction-dispute-portal/shared";
 import type {
 	AdminInvitesQuery,
@@ -27,9 +28,10 @@ import type { AdminInviteModelSelect } from "../schema/index.js";
 import type { Executor } from "../executor.js";
 import {
 	containsText,
-	sortDirection,
+	keyset,
+	sortedBy,
 	withinDays,
-	type Page,
+	type CursorPage,
 } from "./list-filters.js";
 
 /**
@@ -63,7 +65,7 @@ type FindInvitesOptions = AdminInvitesQuery & { invitedBy: string };
 
 /**
  * `status` is derived, not a column — translate it to a predicate over
- * `accepted_at` / `expires_at` so filtering and the page count stay honest.
+ * `accepted_at` / `expires_at` so filtering stays honest.
  */
 const statusPredicate = (status: AdminInviteStatus): SQL | undefined => {
 	switch (status) {
@@ -101,14 +103,17 @@ export const createAdminInvite = async (
 };
 
 /**
- * One page of a given admin's invites, plus the full match count. `search`
- * matches the invitee email; `from` / `to` bound `created_at`; `sort` / `order`
- * pick the column and direction (`created_at` descending by default).
+ * One page of a given admin's invites. `search` matches the invitee email;
+ * `from` / `to` bound `created_at`; `sort` / `order` pick the column and
+ * direction (`created_at` descending by default), with `id` breaking ties. The
+ * page is found by `cursor` (`keyset`). A `status` sort ranks by `now()`, so
+ * an invite that expires between two clicks can shift one place — harmless on
+ * a list this short.
  */
 export const findAdminInvitesByInviter = async (
 	executor: Executor,
 	options: FindInvitesOptions,
-): Promise<Page<AdminInviteModelSelect>> => {
+): Promise<CursorPage<AdminInviteModelSelect>> => {
 	const where = and(
 		eq(AdminInviteModel.invited_by, options.invitedBy),
 		options.status ? statusPredicate(options.status) : undefined,
@@ -118,21 +123,26 @@ export const findAdminInvitesByInviter = async (
 		withinDays(AdminInviteModel.created_at, options.from, options.to),
 	);
 
-	const direction = sortDirection(options.order);
-	const sortColumn = SORT_COLUMN[options.sort ?? ADMIN_INVITE_SORT.created_at];
+	const sort = options.sort ?? ADMIN_INVITE_SORT.created_at;
+	const page = keyset(
+		sortedBy(
+			sort,
+			options.order ?? ORDER_DIRECTION.desc,
+			SORT_COLUMN[sort],
+			AdminInviteModel.id,
+		),
+		options.cursor,
+		options.limit,
+	);
 
-	const [rows, total] = await Promise.all([
-		executor
-			.select()
-			.from(AdminInviteModel)
-			.where(where)
-			.orderBy(direction(sortColumn), desc(AdminInviteModel.id))
-			.limit(options.limit)
-			.offset((options.page - 1) * options.limit),
-		executor.$count(AdminInviteModel, where),
-	]);
+	const probed = await executor
+		.select({ ...getTableColumns(AdminInviteModel), seek: page.seek })
+		.from(AdminInviteModel)
+		.where(and(where, page.where))
+		.orderBy(...page.orderBy)
+		.limit(page.limit);
 
-	return { rows, total };
+	return page.toPage(probed);
 };
 
 /** A single invite by token, unscoped — `undefined` if it does not exist. */

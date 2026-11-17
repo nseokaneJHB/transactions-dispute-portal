@@ -22,7 +22,7 @@ const ReviewQueuePage = () => {
 	const { list, summary } = Route.useLoaderData();
 
 	const filterByStatus = (status: DisputeStatus | undefined) =>
-		navigate({ search: (prev) => ({ ...prev, page: 1, status }) });
+		navigate({ search: (prev) => ({ ...prev, cursor: undefined, status }) });
 
 	return (
 		<div className="flex flex-col gap-5">

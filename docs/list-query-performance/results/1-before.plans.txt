@@ -1,0 +1,407 @@
+== P01 admin queue, first page
+Limit  (cost=30017.99..30026.54 rows=10 width=206)
+  ->  Nested Loop  (cost=30017.99..927683.63 rows=1050000 width=206)
+        ->  Nested Loop  (cost=30017.69..893852.38 rows=1050000 width=176)
+              ->  Gather Merge  (cost=30017.26..272749.38 rows=1050000 width=147)
+                    Workers Planned: 2
+                    ->  Incremental Sort  (cost=29017.23..150553.31 rows=437500 width=147)
+                          Sort Key: d.status, d.created_at, d.id DESC
+                          Presorted Key: d.status
+                          ->  Parallel Index Scan using dispute_status_idx on dispute d  (cost=0.43..76272.28 rows=437500 width=147)
+              ->  Index Scan using transaction_pkey on transaction t  (cost=0.43..0.59 rows=1 width=45)
+                    Index Cond: (id = d.transaction_id)
+        ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+              Cache Key: d.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user" u  (cost=0.29..0.31 rows=1 width=46)
+                    Index Cond: (id = d.user_id)
+== P02 admin queue, row 10,000
+Limit  (cost=38558.63..38567.18 rows=10 width=206)
+  ->  Nested Loop  (cost=30017.99..927683.63 rows=1050000 width=206)
+        ->  Nested Loop  (cost=30017.69..893852.38 rows=1050000 width=176)
+              ->  Gather Merge  (cost=30017.26..272749.38 rows=1050000 width=147)
+                    Workers Planned: 2
+                    ->  Incremental Sort  (cost=29017.23..150553.31 rows=437500 width=147)
+                          Sort Key: d.status, d.created_at, d.id DESC
+                          Presorted Key: d.status
+                          ->  Parallel Index Scan using dispute_status_idx on dispute d  (cost=0.43..76272.28 rows=437500 width=147)
+              ->  Index Scan using transaction_pkey on transaction t  (cost=0.43..0.59 rows=1 width=45)
+                    Index Cond: (id = d.transaction_id)
+        ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+              Cache Key: d.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user" u  (cost=0.29..0.31 rows=1 width=46)
+                    Index Cond: (id = d.user_id)
+== P03 admin queue, row 500,000
+Limit  (cost=295583.89..295585.06 rows=10 width=206)
+  ->  Gather Merge  (cost=237351.82..359641.62 rows=1050000 width=206)
+        Workers Planned: 2
+        ->  Sort  (cost=236351.79..237445.54 rows=437500 width=206)
+              Sort Key: d.status, d.created_at, d.id DESC
+              ->  Hash Join  (cost=38199.77..108623.40 rows=437500 width=206)
+                    Hash Cond: (d.user_id = u.id)
+                    ->  Parallel Hash Join  (cost=36456.75..105731.84 rows=437500 width=176)
+                          Hash Cond: (t.id = d.transaction_id)
+                          ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=45)
+                          ->  Parallel Hash  (cost=21588.00..21588.00 rows=437500 width=147)
+                                ->  Parallel Seq Scan on dispute d  (cost=0.00..21588.00 rows=437500 width=147)
+                    ->  Hash  (cost=1118.01..1118.01 rows=50001 width=46)
+                          ->  Seq Scan on "user" u  (cost=0.00..1118.01 rows=50001 width=46)
+JIT:
+  Functions: 19
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+== P04 admin queue status=SUBMITTED, first page
+Limit  (cost=6.68..62.24 rows=10 width=206)
+  ->  Incremental Sort  (cost=6.68..280024.01 rows=50400 width=206)
+        Sort Key: d.created_at, d.id DESC
+        Presorted Key: d.created_at
+        ->  Nested Loop  (cost=1.16..277756.01 rows=50400 width=206)
+              ->  Nested Loop  (cost=0.86..268511.32 rows=50400 width=176)
+                    ->  Index Scan using dispute_created_at_idx on dispute d  (cost=0.43..103621.32 rows=50400 width=147)
+                          Filter: (status = 'SUBMITTED'::"disputeStatus")
+                    ->  Index Scan using transaction_pkey on transaction t  (cost=0.43..3.27 rows=1 width=45)
+                          Index Cond: (id = d.transaction_id)
+              ->  Memoize  (cost=0.30..0.38 rows=1 width=46)
+                    Cache Key: d.user_id
+                    Cache Mode: logical
+                    ->  Index Scan using user_pkey on "user" u  (cost=0.29..0.37 rows=1 width=46)
+                          Index Cond: (id = d.user_id)
+== P05 admin search 'merchant 42', first page
+Limit  (cost=30017.99..30301.55 rows=10 width=206)
+  ->  Nested Loop  (cost=30017.99..948683.63 rows=32397 width=206)
+        Join Filter: ((d.description ~~* '%merchant 42%'::text) OR ((t.merchant_name)::text ~~* '%merchant 42%'::text) OR ((u.name)::text ~~* '%merchant 42%'::text) OR ((u.email)::text ~~* '%merchant 42%'::text))
+        ->  Nested Loop  (cost=30017.56..306580.63 rows=1050000 width=177)
+              ->  Gather Merge  (cost=30017.26..272749.38 rows=1050000 width=147)
+                    Workers Planned: 2
+                    ->  Incremental Sort  (cost=29017.23..150553.31 rows=437500 width=147)
+                          Sort Key: d.status, d.created_at, d.id DESC
+                          Presorted Key: d.status
+                          ->  Parallel Index Scan using dispute_status_idx on dispute d  (cost=0.43..76272.28 rows=437500 width=147)
+              ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+                    Cache Key: d.user_id
+                    Cache Mode: logical
+                    ->  Index Scan using user_pkey on "user" u  (cost=0.29..0.31 rows=1 width=46)
+                          Index Cond: (id = d.user_id)
+        ->  Index Scan using transaction_pkey on transaction t  (cost=0.43..0.59 rows=1 width=45)
+              Index Cond: (id = d.transaction_id)
+== P06 heavy customer transactions, first page
+Limit  (cost=1.00..7.09 rows=10 width=61)
+  ->  Incremental Sort  (cost=1.00..118847.14 rows=195140 width=61)
+        Sort Key: transacted_at DESC, id DESC
+        Presorted Key: transacted_at
+        ->  Index Scan Backward using transaction_user_transacted_idx on transaction t  (cost=0.43..110065.84 rows=195140 width=61)
+              Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== P07 heavy customer transactions, row 10,000
+Limit  (cost=6085.22..6091.31 rows=10 width=61)
+  ->  Incremental Sort  (cost=1.00..118847.14 rows=195140 width=61)
+        Sort Key: transacted_at DESC, id DESC
+        Presorted Key: transacted_at
+        ->  Index Scan Backward using transaction_user_transacted_idx on transaction t  (cost=0.43..110065.84 rows=195140 width=61)
+              Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== P08 heavy customer transactions, row 100,000
+Limit  (cost=55022.74..55023.91 rows=10 width=61)
+  ->  Gather Merge  (cost=43377.26..66104.41 rows=195139 width=61)
+        Workers Planned: 2
+        ->  Sort  (cost=42377.24..42580.51 rows=81308 width=61)
+              Sort Key: transacted_at DESC, id DESC
+              ->  Parallel Bitmap Heap Scan on transaction t  (cost=2336.76..32687.12 rows=81308 width=61)
+                    Recheck Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+                    ->  Bitmap Index Scan on transaction_user_id_idx  (cost=0.00..2287.98 rows=195140 width=0)
+                          Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== P09 heavy customer disputes, first page
+Limit  (cost=6.08..58.67 rows=10 width=144)
+  ->  Incremental Sort  (cost=6.08..273351.01 rows=51975 width=144)
+        Sort Key: d.created_at DESC, d.id DESC
+        Presorted Key: d.created_at
+        ->  Nested Loop  (cost=0.86..271012.14 rows=51975 width=144)
+              ->  Index Scan Backward using dispute_created_at_idx on dispute d  (cost=0.43..103621.32 rows=51975 width=115)
+                    Filter: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+              ->  Index Scan using transaction_pkey on transaction t  (cost=0.43..3.22 rows=1 width=45)
+                    Index Cond: (id = d.transaction_id)
+== P10 heavy customer disputes, row 10,000
+Limit  (cost=34198.76..34231.99 rows=10 width=144)
+  ->  Gather Merge  (cost=1008.54..173684.07 rows=51974 width=144)
+        Workers Planned: 2
+        ->  Incremental Sort  (cost=8.52..166684.96 rows=21656 width=144)
+              Sort Key: d.created_at DESC, d.id DESC
+              Presorted Key: d.created_at
+              ->  Nested Loop  (cost=0.86..165710.44 rows=21656 width=144)
+                    ->  Parallel Index Scan Backward using dispute_created_at_idx on dispute d  (cost=0.43..95965.07 rows=21656 width=115)
+                          Filter: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+                    ->  Index Scan using transaction_pkey on transaction t  (cost=0.43..3.22 rows=1 width=45)
+                          Index Cond: (id = d.transaction_id)
+== P11 heavy customer disputes, row 40,000
+Limit  (cost=67611.05..67612.22 rows=10 width=144)
+  ->  Gather Merge  (cost=62953.56..69006.79 rows=51974 width=144)
+        Workers Planned: 2
+        ->  Sort  (cost=61953.54..62007.68 rows=21656 width=144)
+              Sort Key: d.created_at DESC, d.id DESC
+              ->  Parallel Hash Join  (cost=18365.64..60394.03 rows=21656 width=144)
+                    Hash Cond: (t.id = d.transaction_id)
+                    ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=45)
+                    ->  Parallel Hash  (cost=18094.94..18094.94 rows=21656 width=115)
+                          ->  Parallel Bitmap Heap Scan on dispute d  (cost=611.23..18094.94 rows=21656 width=115)
+                                Recheck Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+                                ->  Bitmap Index Scan on dispute_user_id_idx  (cost=0.00..598.24 rows=51975 width=0)
+                                      Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== P12 normal customer transactions, first page
+Limit  (cost=4.03..39.57 rows=10 width=61)
+  ->  Incremental Sort  (cost=4.03..160.42 rows=44 width=61)
+        Sort Key: transacted_at DESC, id DESC
+        Presorted Key: transacted_at
+        ->  Index Scan Backward using transaction_user_transacted_idx on transaction t  (cost=0.43..158.44 rows=44 width=61)
+              Index Cond: (user_id = '01a1eb70-f26b-7ac6-8646-40834fe6c228'::uuid)
+== P13 normal customer disputes, first page
+Limit  (cost=403.36..403.39 rows=10 width=144)
+  ->  Sort  (cost=403.36..403.47 rows=41 width=144)
+        Sort Key: d.created_at DESC, d.id DESC
+        ->  Nested Loop  (cost=0.86..402.48 rows=41 width=144)
+              ->  Index Scan using dispute_user_id_idx on dispute d  (cost=0.43..56.13 rows=41 width=115)
+                    Index Cond: (user_id = '01a1eb70-f26b-7ac6-8646-40834fe6c228'::uuid)
+              ->  Index Scan using transaction_pkey on transaction t  (cost=0.43..8.45 rows=1 width=45)
+                    Index Cond: (id = d.transaction_id)
+== S01 admin sort=amount desc, first page
+Limit  (cost=119077.64..119078.80 rows=10 width=206)
+  ->  Gather Merge  (cost=119077.64..241367.44 rows=1050000 width=206)
+        Workers Planned: 2
+        ->  Sort  (cost=118077.62..119171.37 rows=437500 width=206)
+              Sort Key: t.amount_cents DESC, d.id DESC
+              ->  Hash Join  (cost=38199.77..108623.40 rows=437500 width=206)
+                    Hash Cond: (d.user_id = u.id)
+                    ->  Parallel Hash Join  (cost=36456.75..105731.84 rows=437500 width=176)
+                          Hash Cond: (t.id = d.transaction_id)
+                          ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=45)
+                          ->  Parallel Hash  (cost=21588.00..21588.00 rows=437500 width=147)
+                                ->  Parallel Seq Scan on dispute d  (cost=0.00..21588.00 rows=437500 width=147)
+                    ->  Hash  (cost=1118.01..1118.01 rows=50001 width=46)
+                          ->  Seq Scan on "user" u  (cost=0.00..1118.01 rows=50001 width=46)
+JIT:
+  Functions: 19
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+== S02 admin sort=amount desc, row 10,000
+Limit  (cost=142041.29..142042.46 rows=10 width=206)
+  ->  Gather Merge  (cost=140877.79..263167.60 rows=1050000 width=206)
+        Workers Planned: 2
+        ->  Sort  (cost=139877.77..140971.52 rows=437500 width=206)
+              Sort Key: t.amount_cents DESC, d.id DESC
+              ->  Hash Join  (cost=38199.77..108623.40 rows=437500 width=206)
+                    Hash Cond: (d.user_id = u.id)
+                    ->  Parallel Hash Join  (cost=36456.75..105731.84 rows=437500 width=176)
+                          Hash Cond: (t.id = d.transaction_id)
+                          ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=45)
+                          ->  Parallel Hash  (cost=21588.00..21588.00 rows=437500 width=147)
+                                ->  Parallel Seq Scan on dispute d  (cost=0.00..21588.00 rows=437500 width=147)
+                    ->  Hash  (cost=1118.01..1118.01 rows=50001 width=46)
+                          ->  Seq Scan on "user" u  (cost=0.00..1118.01 rows=50001 width=46)
+JIT:
+  Functions: 19
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+== S03 admin sort=amount desc, row 500,000
+Limit  (cost=295583.89..295585.06 rows=10 width=206)
+  ->  Gather Merge  (cost=237351.82..359641.62 rows=1050000 width=206)
+        Workers Planned: 2
+        ->  Sort  (cost=236351.79..237445.54 rows=437500 width=206)
+              Sort Key: t.amount_cents DESC, d.id DESC
+              ->  Hash Join  (cost=38199.77..108623.40 rows=437500 width=206)
+                    Hash Cond: (d.user_id = u.id)
+                    ->  Parallel Hash Join  (cost=36456.75..105731.84 rows=437500 width=176)
+                          Hash Cond: (t.id = d.transaction_id)
+                          ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=45)
+                          ->  Parallel Hash  (cost=21588.00..21588.00 rows=437500 width=147)
+                                ->  Parallel Seq Scan on dispute d  (cost=0.00..21588.00 rows=437500 width=147)
+                    ->  Hash  (cost=1118.01..1118.01 rows=50001 width=46)
+                          ->  Seq Scan on "user" u  (cost=0.00..1118.01 rows=50001 width=46)
+JIT:
+  Functions: 19
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+== S04 admin sort=customer asc, first page
+Limit  (cost=119077.64..119078.80 rows=10 width=206)
+  ->  Gather Merge  (cost=119077.64..241367.44 rows=1050000 width=206)
+        Workers Planned: 2
+        ->  Sort  (cost=118077.62..119171.37 rows=437500 width=206)
+              Sort Key: u.name, d.id DESC
+              ->  Hash Join  (cost=38199.77..108623.40 rows=437500 width=206)
+                    Hash Cond: (d.user_id = u.id)
+                    ->  Parallel Hash Join  (cost=36456.75..105731.84 rows=437500 width=176)
+                          Hash Cond: (t.id = d.transaction_id)
+                          ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=45)
+                          ->  Parallel Hash  (cost=21588.00..21588.00 rows=437500 width=147)
+                                ->  Parallel Seq Scan on dispute d  (cost=0.00..21588.00 rows=437500 width=147)
+                    ->  Hash  (cost=1118.01..1118.01 rows=50001 width=46)
+                          ->  Seq Scan on "user" u  (cost=0.00..1118.01 rows=50001 width=46)
+JIT:
+  Functions: 19
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+== S05 admin sort=customer asc, row 10,000
+Limit  (cost=142041.29..142042.46 rows=10 width=206)
+  ->  Gather Merge  (cost=140877.79..263167.60 rows=1050000 width=206)
+        Workers Planned: 2
+        ->  Sort  (cost=139877.77..140971.52 rows=437500 width=206)
+              Sort Key: u.name, d.id DESC
+              ->  Hash Join  (cost=38199.77..108623.40 rows=437500 width=206)
+                    Hash Cond: (d.user_id = u.id)
+                    ->  Parallel Hash Join  (cost=36456.75..105731.84 rows=437500 width=176)
+                          Hash Cond: (t.id = d.transaction_id)
+                          ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=45)
+                          ->  Parallel Hash  (cost=21588.00..21588.00 rows=437500 width=147)
+                                ->  Parallel Seq Scan on dispute d  (cost=0.00..21588.00 rows=437500 width=147)
+                    ->  Hash  (cost=1118.01..1118.01 rows=50001 width=46)
+                          ->  Seq Scan on "user" u  (cost=0.00..1118.01 rows=50001 width=46)
+JIT:
+  Functions: 19
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+== S06 admin sort=status asc, first page
+Limit  (cost=30017.99..30026.54 rows=10 width=206)
+  ->  Nested Loop  (cost=30017.99..927683.63 rows=1050000 width=206)
+        ->  Nested Loop  (cost=30017.69..893852.38 rows=1050000 width=176)
+              ->  Gather Merge  (cost=30017.26..272749.38 rows=1050000 width=147)
+                    Workers Planned: 2
+                    ->  Incremental Sort  (cost=29017.23..150553.31 rows=437500 width=147)
+                          Sort Key: d.status, d.id DESC
+                          Presorted Key: d.status
+                          ->  Parallel Index Scan using dispute_status_idx on dispute d  (cost=0.43..76272.28 rows=437500 width=147)
+              ->  Index Scan using transaction_pkey on transaction t  (cost=0.43..0.59 rows=1 width=45)
+                    Index Cond: (id = d.transaction_id)
+        ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+              Cache Key: d.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user" u  (cost=0.29..0.31 rows=1 width=46)
+                    Index Cond: (id = d.user_id)
+== S07 admin sort=status asc, row 10,000
+Limit  (cost=38558.63..38567.18 rows=10 width=206)
+  ->  Nested Loop  (cost=30017.99..927683.63 rows=1050000 width=206)
+        ->  Nested Loop  (cost=30017.69..893852.38 rows=1050000 width=176)
+              ->  Gather Merge  (cost=30017.26..272749.38 rows=1050000 width=147)
+                    Workers Planned: 2
+                    ->  Incremental Sort  (cost=29017.23..150553.31 rows=437500 width=147)
+                          Sort Key: d.status, d.id DESC
+                          Presorted Key: d.status
+                          ->  Parallel Index Scan using dispute_status_idx on dispute d  (cost=0.43..76272.28 rows=437500 width=147)
+              ->  Index Scan using transaction_pkey on transaction t  (cost=0.43..0.59 rows=1 width=45)
+                    Index Cond: (id = d.transaction_id)
+        ->  Memoize  (cost=0.30..0.32 rows=1 width=46)
+              Cache Key: d.user_id
+              Cache Mode: logical
+              ->  Index Scan using user_pkey on "user" u  (cost=0.29..0.31 rows=1 width=46)
+                    Index Cond: (id = d.user_id)
+== S08 heavy customer transactions sort=amount asc, first page
+Limit  (cost=35444.18..35445.34 rows=10 width=61)
+  ->  Gather Merge  (cost=35444.18..58171.33 rows=195139 width=61)
+        Workers Planned: 2
+        ->  Sort  (cost=34444.16..34647.43 rows=81308 width=61)
+              Sort Key: amount_cents, id DESC
+              ->  Parallel Bitmap Heap Scan on transaction t  (cost=2336.76..32687.12 rows=81308 width=61)
+                    Recheck Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+                    ->  Bitmap Index Scan on transaction_user_id_idx  (cost=0.00..2287.98 rows=195140 width=0)
+                          Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== S09 heavy customer transactions sort=amount asc, row 10,000
+Limit  (cost=40659.17..40660.33 rows=10 width=61)
+  ->  Gather Merge  (cost=39495.67..62222.82 rows=195139 width=61)
+        Workers Planned: 2
+        ->  Sort  (cost=38495.65..38698.92 rows=81308 width=61)
+              Sort Key: amount_cents, id DESC
+              ->  Parallel Bitmap Heap Scan on transaction t  (cost=2336.76..32687.12 rows=81308 width=61)
+                    Recheck Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+                    ->  Bitmap Index Scan on transaction_user_id_idx  (cost=0.00..2287.98 rows=195140 width=0)
+                          Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== S10 heavy customer disputes sort=merchant asc, first page
+Limit  (cost=61862.04..61863.20 rows=10 width=144)
+  ->  Gather Merge  (cost=61862.04..67915.27 rows=51974 width=144)
+        Workers Planned: 2
+        ->  Sort  (cost=60862.01..60916.15 rows=21656 width=144)
+              Sort Key: t.merchant_name, d.id DESC
+              ->  Parallel Hash Join  (cost=18365.64..60394.03 rows=21656 width=144)
+                    Hash Cond: (t.id = d.transaction_id)
+                    ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=45)
+                    ->  Parallel Hash  (cost=18094.94..18094.94 rows=21656 width=115)
+                          ->  Parallel Bitmap Heap Scan on dispute d  (cost=611.23..18094.94 rows=21656 width=115)
+                                Recheck Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+                                ->  Bitmap Index Scan on dispute_user_id_idx  (cost=0.00..598.24 rows=51975 width=0)
+                                      Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== S11 heavy customer disputes sort=merchant asc, row 10,000
+Limit  (cost=64104.63..64105.80 rows=10 width=144)
+  ->  Gather Merge  (cost=62941.13..68994.36 rows=51974 width=144)
+        Workers Planned: 2
+        ->  Sort  (cost=61941.11..61995.25 rows=21656 width=144)
+              Sort Key: t.merchant_name, d.id DESC
+              ->  Parallel Hash Join  (cost=18365.64..60394.03 rows=21656 width=144)
+                    Hash Cond: (t.id = d.transaction_id)
+                    ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=45)
+                    ->  Parallel Hash  (cost=18094.94..18094.94 rows=21656 width=115)
+                          ->  Parallel Bitmap Heap Scan on dispute d  (cost=611.23..18094.94 rows=21656 width=115)
+                                Recheck Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+                                ->  Bitmap Index Scan on dispute_user_id_idx  (cost=0.00..598.24 rows=51975 width=0)
+                                      Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== C01 count: admin queue
+Finalize Aggregate  (cost=88781.40..88781.41 rows=1 width=8)
+  ->  Gather  (cost=88781.18..88781.39 rows=2 width=8)
+        Workers Planned: 2
+        ->  Partial Aggregate  (cost=87781.18..87781.19 rows=1 width=8)
+              ->  Parallel Hash Join  (cost=31837.35..86687.43 rows=437500 width=0)
+                    Hash Cond: (t.id = d.transaction_id)
+                    ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=16)
+                    ->  Parallel Hash  (cost=24231.60..24231.60 rows=437500 width=16)
+                          ->  Parallel Hash Join  (cost=1495.06..24231.60 rows=437500 width=16)
+                                Hash Cond: (d.user_id = u.id)
+                                ->  Parallel Seq Scan on dispute d  (cost=0.00..21588.00 rows=437500 width=32)
+                                ->  Parallel Hash  (cost=1234.63..1234.63 rows=20834 width=16)
+                                      ->  Parallel Index Only Scan using user_pkey on "user" u  (cost=0.29..1234.63 rows=20834 width=16)
+== C02 count: admin queue status=SUBMITTED
+Finalize Aggregate  (cost=30396.77..30396.78 rows=1 width=8)
+  ->  Gather  (cost=30396.56..30396.77 rows=2 width=8)
+        Workers Planned: 2
+        ->  Partial Aggregate  (cost=29396.56..29396.57 rows=1 width=8)
+              ->  Parallel Hash Join  (cost=1495.91..29344.06 rows=21000 width=0)
+                    Hash Cond: (d.user_id = u.id)
+                    ->  Nested Loop  (cost=0.85..27793.88 rows=21000 width=16)
+                          ->  Parallel Index Scan using dispute_open_per_transaction_uq_idx on dispute d  (cost=0.42..4274.71 rows=21000 width=32)
+                                Filter: (status = 'SUBMITTED'::"disputeStatus")
+                          ->  Index Only Scan using transaction_pkey on transaction t  (cost=0.43..1.12 rows=1 width=16)
+                                Index Cond: (id = d.transaction_id)
+                    ->  Parallel Hash  (cost=1234.63..1234.63 rows=20834 width=16)
+                          ->  Parallel Index Only Scan using user_pkey on "user" u  (cost=0.29..1234.63 rows=20834 width=16)
+== C03 count: admin search
+Finalize Aggregate  (cost=95823.26..95823.27 rows=1 width=8)
+  ->  Gather  (cost=95823.05..95823.26 rows=2 width=8)
+        Workers Planned: 2
+        ->  Partial Aggregate  (cost=94823.05..94823.06 rows=1 width=8)
+              ->  Hash Join  (cost=33072.77..94789.30 rows=13499 width=0)
+                    Hash Cond: (d.user_id = u.id)
+                    Join Filter: ((d.description ~~* '%merchant 42%'::text) OR ((t.merchant_name)::text ~~* '%merchant 42%'::text) OR ((u.name)::text ~~* '%merchant 42%'::text) OR ((u.email)::text ~~* '%merchant 42%'::text))
+                    ->  Parallel Hash Join  (cost=31329.75..91897.84 rows=437500 width=48)
+                          Hash Cond: (t.id = d.transaction_id)
+                          ->  Parallel Seq Scan on transaction t  (cost=0.00..38500.67 rows=916667 width=29)
+                          ->  Parallel Hash  (cost=21588.00..21588.00 rows=437500 width=51)
+                                ->  Parallel Seq Scan on dispute d  (cost=0.00..21588.00 rows=437500 width=51)
+                    ->  Hash  (cost=1118.01..1118.01 rows=50001 width=46)
+                          ->  Seq Scan on "user" u  (cost=0.00..1118.01 rows=50001 width=46)
+== C04 count: heavy customer transactions
+Finalize Aggregate  (cost=4304.55..4304.56 rows=1 width=8)
+  ->  Gather  (cost=4304.33..4304.54 rows=2 width=8)
+        Workers Planned: 2
+        ->  Partial Aggregate  (cost=3304.33..3304.34 rows=1 width=8)
+              ->  Parallel Index Only Scan using transaction_user_id_idx on transaction t  (cost=0.43..3101.06 rows=81308 width=0)
+                    Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+== C05 count: heavy customer disputes
+Finalize Aggregate  (cost=42961.86..42961.87 rows=1 width=8)
+  ->  Gather  (cost=42961.64..42961.85 rows=2 width=8)
+        Workers Planned: 2
+        ->  Partial Aggregate  (cost=41961.64..41961.65 rows=1 width=8)
+              ->  Nested Loop  (cost=611.66..41907.50 rows=21656 width=0)
+                    ->  Parallel Bitmap Heap Scan on dispute d  (cost=611.23..18094.94 rows=21656 width=16)
+                          Recheck Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+                          ->  Bitmap Index Scan on dispute_user_id_idx  (cost=0.00..598.24 rows=51975 width=0)
+                                Index Cond: (user_id = '01a1eb70-f504-71db-a54b-bf746c7ea62f'::uuid)
+                    ->  Index Only Scan using transaction_pkey on transaction t  (cost=0.43..1.10 rows=1 width=16)
+                          Index Cond: (id = d.transaction_id)
+== C06 count: normal customer transactions
+Aggregate  (cost=5.31..5.32 rows=1 width=8)
+  ->  Index Only Scan using transaction_user_transacted_idx on transaction t  (cost=0.43..5.20 rows=44 width=0)
+        Index Cond: (user_id = '01a1eb70-f26b-7ac6-8646-40834fe6c228'::uuid)
+== C07 count: normal customer disputes
+Aggregate  (cost=238.58..238.59 rows=1 width=8)
+  ->  Nested Loop  (cost=0.86..238.48 rows=41 width=0)
+        ->  Index Scan using dispute_user_id_idx on dispute d  (cost=0.43..56.13 rows=41 width=16)
+              Index Cond: (user_id = '01a1eb70-f26b-7ac6-8646-40834fe6c228'::uuid)
+        ->  Index Only Scan using transaction_pkey on transaction t  (cost=0.43..4.45 rows=1 width=16)
+              Index Cond: (id = d.transaction_id)

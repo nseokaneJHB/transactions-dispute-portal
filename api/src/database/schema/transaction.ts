@@ -33,13 +33,12 @@ export const TransactionModel = pgTable(
 			.references(() => UserModel.id, { onDelete: "cascade" }),
 	},
 	(table) => [
-		index("transaction_user_id_idx").on(table.user_id),
-		index("transaction_updated_idx").on(table.updated_at),
-		index("transaction_transacted_at_idx").on(table.transacted_at),
 		index("transaction_user_transacted_idx").on(
 			table.user_id,
 			table.transacted_at,
 		),
+		index("transaction_amount_idx").on(table.amount_cents),
+		index("transaction_merchant_idx").on(table.merchant_name),
 	],
 );
 

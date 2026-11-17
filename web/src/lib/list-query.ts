@@ -35,10 +35,10 @@ const FILTER_KEYS = [
 /**
  * The search-param patch that resets every optional list filter — spread into a
  * navigate updater (`{ ...prev, ...CLEARED_FILTERS }`) to drop search, dates,
- * status and sort in one go while keeping `page` / `limit`.
+ * status and sort in one go while keeping `limit`.
  */
 export const CLEARED_FILTERS = {
-	page: 1,
+	cursor: undefined,
 	search: undefined,
 	from: undefined,
 	to: undefined,

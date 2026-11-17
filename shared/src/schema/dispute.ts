@@ -11,15 +11,42 @@ import {
 } from "./field.js";
 import {
 	amountRangeQueryShape,
+	CURSOR_ORDER_ISSUE,
 	globalResponseSchema,
+	isCursorForOrder,
 	isOrderedAmountRange,
 	isOrderedDateRange,
 	ORDERED_AMOUNT_RANGE_ISSUE,
 	ORDERED_DATE_RANGE_ISSUE,
 	paginatedGlobalResponseSchema,
 	paginationQuerySchema,
+	seekIntegerSchema,
+	seekTextSchema,
+	seekTimestampSchema,
 } from "./global.js";
-import { ADMIN_DISPUTE_SORT, DISPUTE_SORT } from "../constant.js";
+import {
+	ADMIN_DISPUTE_SORT,
+	DISPUTE_SORT,
+	REVIEW_QUEUE_ORDER,
+} from "../constant.js";
+
+/** The sort value a customer disputes `cursor` carries, per `sort`. */
+const DISPUTE_SEEK_VALUES: Record<keyof typeof DISPUTE_SORT, z.ZodType> = {
+	[DISPUTE_SORT.created_at]: z.tuple([seekTimestampSchema]),
+	[DISPUTE_SORT.merchant]: z.tuple([seekTextSchema]),
+	[DISPUTE_SORT.amount_cents]: z.tuple([seekIntegerSchema]),
+	[DISPUTE_SORT.status]: z.tuple([disputeStatusSchema]),
+};
+
+/** The review queue adds the customer sort, and its default work-list order carries a status and a timestamp. */
+const REVIEW_SEEK_VALUES: Record<
+	keyof typeof ADMIN_DISPUTE_SORT | typeof REVIEW_QUEUE_ORDER,
+	z.ZodType
+> = {
+	...DISPUTE_SEEK_VALUES,
+	[ADMIN_DISPUTE_SORT.customer]: z.tuple([seekTextSchema]),
+	[REVIEW_QUEUE_ORDER]: z.tuple([disputeStatusSchema, seekTimestampSchema]),
+};
 
 /**
  * Body for `POST /v1/disputes` — open a dispute on one of the caller's own
@@ -40,8 +67,8 @@ export const disputeCreateBodySchema = z.object({
  * transaction, the disputed transaction's amount, and (from
  * `paginationQuerySchema`) `search` / `from` / `to` / pagination. `search` matches the dispute description and the disputed
  * merchant, plus — on the admin route only — the customer's name and email.
- * The two routes differ only in their `sort` whitelist, so `sort` is added per
- * route below.
+ * The two routes differ only in their `sort` whitelist and the cursor values
+ * each sort carries, so both are added per route below.
  */
 const disputesQueryBase = paginationQuerySchema.extend({
 	...amountRangeQueryShape,
@@ -62,7 +89,11 @@ export const disputesQuerySchema = disputesQueryBase
 			.describe("Column to sort the page by — defaults to `created_at`"),
 	})
 	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE)
-	.refine(isOrderedAmountRange, ORDERED_AMOUNT_RANGE_ISSUE);
+	.refine(isOrderedAmountRange, ORDERED_AMOUNT_RANGE_ISSUE)
+	.refine(
+		isCursorForOrder(DISPUTE_SEEK_VALUES, DISPUTE_SORT.created_at),
+		CURSOR_ORDER_ISSUE,
+	);
 
 /**
  * Query for `GET /v1/admin/disputes` — the review queue. Same filters as
@@ -78,7 +109,11 @@ export const adminDisputesQuerySchema = disputesQueryBase
 			.describe("Column to sort the page by — defaults to `created_at`"),
 	})
 	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE)
-	.refine(isOrderedAmountRange, ORDERED_AMOUNT_RANGE_ISSUE);
+	.refine(isOrderedAmountRange, ORDERED_AMOUNT_RANGE_ISSUE)
+	.refine(
+		isCursorForOrder(REVIEW_SEEK_VALUES, REVIEW_QUEUE_ORDER),
+		CURSOR_ORDER_ISSUE,
+	);
 
 /**
  * The disputed transaction's own details, carried on every dispute response so

@@ -34,10 +34,7 @@ export const AuthAuditLogModel = pgTable(
 		}),
 	},
 	(table) => [
-		index("auth_audit_log_email_idx").on(table.email),
-		index("auth_audit_log_event_idx").on(table.event),
 		index("auth_audit_log_user_id_idx").on(table.user_id),
-		index("auth_audit_log_created_at_idx").on(table.created_at),
 	],
 );
 
