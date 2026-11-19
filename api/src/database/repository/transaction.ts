@@ -1,7 +1,10 @@
-import { and, desc, eq, getTableColumns } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
-import { TRANSACTION_SORT } from "@transaction-dispute-portal/shared";
+import {
+	ORDER_DIRECTION,
+	TRANSACTION_SORT,
+} from "@transaction-dispute-portal/shared";
 import type {
 	TransactionSort,
 	TransactionsQuery,
@@ -13,10 +16,11 @@ import type { TransactionModelSelect } from "../schema/index.js";
 import type { Executor } from "../executor.js";
 import {
 	containsText,
-	sortDirection,
+	keyset,
+	sortedBy,
 	withinAmount,
 	withinDays,
-	type Page,
+	type CursorPage,
 } from "./list-filters.js";
 
 /**
@@ -43,15 +47,16 @@ export type TransactionRow = Omit<TransactionModelSelect, "user_id">;
 type FindManyOptions = TransactionsQuery & { userId: string };
 
 /**
- * One page of a user's transactions plus the full match count. `search` matches
- * the merchant name; `from` / `to` bound `transacted_at`; `min_amount_cents` /
- * `max_amount_cents` bound `amount_cents`; `sort` / `order` pick
- * the column and direction (`transacted_at` descending by default).
+ * One page of a user's transactions. `search` matches the merchant name;
+ * `from` / `to` bound `transacted_at`; `min_amount_cents` / `max_amount_cents`
+ * bound `amount_cents`; `sort` / `order` pick the column and direction
+ * (`transacted_at` descending by default), with `id` breaking ties. The page
+ * is found by `cursor` (`keyset`), never by skipping rows.
  */
 export const findTransactionsByUser = async (
 	executor: Executor,
 	options: FindManyOptions,
-): Promise<Page<TransactionRow>> => {
+): Promise<CursorPage<TransactionRow>> => {
 	const where = and(
 		eq(TransactionModel.user_id, options.userId),
 		options.search
@@ -65,22 +70,26 @@ export const findTransactionsByUser = async (
 		),
 	);
 
-	const direction = sortDirection(options.order);
-	const sortColumn =
-		SORT_COLUMN[options.sort ?? TRANSACTION_SORT.transacted_at];
+	const sort = options.sort ?? TRANSACTION_SORT.transacted_at;
+	const page = keyset(
+		sortedBy(
+			sort,
+			options.order ?? ORDER_DIRECTION.desc,
+			SORT_COLUMN[sort],
+			TransactionModel.id,
+		),
+		options.cursor,
+		options.limit,
+	);
 
-	const [rows, total] = await Promise.all([
-		executor
-			.select(CUSTOMER_COLUMNS)
-			.from(TransactionModel)
-			.where(where)
-			.orderBy(direction(sortColumn), desc(TransactionModel.id))
-			.limit(options.limit)
-			.offset((options.page - 1) * options.limit),
-		executor.$count(TransactionModel, where),
-	]);
+	const probed = await executor
+		.select({ ...CUSTOMER_COLUMNS, seek: page.seek })
+		.from(TransactionModel)
+		.where(and(where, page.where))
+		.orderBy(...page.orderBy)
+		.limit(page.limit);
 
-	return { rows, total };
+	return page.toPage(probed);
 };
 
 /** A single transaction, but only if it belongs to `userId` — otherwise `undefined`. */

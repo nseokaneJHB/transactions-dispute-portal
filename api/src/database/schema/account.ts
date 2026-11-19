@@ -43,7 +43,6 @@ export const AccountModel = pgTable(
 	},
 	(table) => [
 		index("account_user_id_idx").on(table.user_id),
-		index("account_updated_idx").on(table.updated_at),
 
 		uniqueIndex("account_issuer_account_id_uq_idx").on(
 			table.issuer,

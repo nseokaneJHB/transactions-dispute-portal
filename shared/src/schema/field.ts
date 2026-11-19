@@ -4,7 +4,6 @@ import {
 	ADMIN_INVITE_STATUS,
 	ADMIN_RESOLUTION_STATUS,
 	DEFAULT_PAGE_LIMIT,
-	DEFAULT_PAGE_NUMBER,
 	DISPUTE_REASON,
 	DISPUTE_STATUS,
 	HTTP_CODE,
@@ -55,14 +54,7 @@ export const orderDirectionSchema = z
 	.enum(ORDER_DIRECTION)
 	.describe("Order direction for sorting");
 
-/** `page` / `limit` as they arrive on a list query — coerced from their string query form, defaulted, bounded. */
-export const pageQuerySchema = z.coerce
-	.number()
-	.int()
-	.positive()
-	.default(DEFAULT_PAGE_NUMBER)
-	.describe("1-based page number");
-
+/** `limit` as it arrives on a list query — coerced from its string query form, defaulted, bounded. */
 export const limitQuerySchema = z.coerce
 	.number()
 	.int()

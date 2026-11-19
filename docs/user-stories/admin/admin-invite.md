@@ -53,7 +53,7 @@ from one IP — see *duplicate email race at account creation* (below) and
 (`invited_by = caller`), newest first. `status` is **derived, not a column**:
 `ACCEPTED` (accepted_at set) / `EXPIRED` (past expires_at, unaccepted) /
 `PENDING`. Filtering by `?status=` is translated to a predicate over
-`accepted_at` / `expires_at` so page counts stay honest (`statusPredicate` in
+`accepted_at` / `expires_at` so the filter stays honest (`statusPredicate` in
 `repository/admin-invite.ts`). Supports the shared list query — see
 `docs/user-stories/admin/list-search-sort-filter.md`.
 
@@ -67,7 +67,7 @@ No new `AUTH_EVENT` values for invites — the `admin_invite` row's own
 **Trigger:** the guarded `UPDATE … accepted_at` succeeds (the invite itself
 was valid and unused), but the subsequent `createUser({ name, email:
 invite.email, role: ADMIN, email_verified: true })` hits Postgres error
-`23505` on `user_email_uq_idx` / `user_email_unique` — an account for that
+`23505` on `user_email_uq_idx` — an account for that
 email was created through some other path between the invite being sent and
 being accepted.
 

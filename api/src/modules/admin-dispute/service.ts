@@ -53,7 +53,7 @@ export const listDisputesForReview = async (
 	request: FastifyRequest<ListDisputesForReviewRequest>,
 	reply: FastifyReply<ListDisputesForReviewRequest>,
 ): Promise<void> => {
-	const { rows, total } = await findDisputesForReview(
+	const { rows, nextCursor, prevCursor } = await findDisputesForReview(
 		request.server.connection,
 		request.query,
 	);
@@ -61,7 +61,8 @@ export const listDisputesForReview = async (
 	return reply.status(HTTP_RESPONSE_CODE.OK.status).send(
 		paginatedResponse({
 			query: request.query,
-			total,
+			nextCursor,
+			prevCursor,
 			rows: rows.map(toWire),
 			message: "Disputes retrieved.",
 		}),

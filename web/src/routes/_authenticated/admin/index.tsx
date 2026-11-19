@@ -22,7 +22,7 @@ const ReviewQueuePage = () => {
 	const { list, summary } = Route.useLoaderData();
 
 	const filterByStatus = (status: DisputeStatus | undefined) =>
-		navigate({ search: (prev) => ({ ...prev, page: 1, status }) });
+		navigate({ search: (prev) => ({ ...prev, cursor: undefined, status }) });
 
 	return (
 		<div className="flex flex-col gap-5">
@@ -104,11 +104,11 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 	loaderDeps: ({ search }) => search,
 	loader: async ({ context, deps }) => {
 		const [list, summary] = await Promise.all([
-			context.queryClient.ensureQueryData({
+			context.queryClient.fetchQuery({
 				queryKey: [...QUERY_KEYS.ADMIN_DISPUTES, deps],
 				queryFn: () => adminDisputesRequest({ data: deps }),
 			}),
-			context.queryClient.ensureQueryData({
+			context.queryClient.fetchQuery({
 				queryKey: QUERY_KEYS.ADMIN_DISPUTE_SUMMARY,
 				queryFn: () => adminDisputeSummaryRequest(),
 			}),

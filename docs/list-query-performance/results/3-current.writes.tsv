@@ -1,0 +1,8 @@
+W01 insert 200k transactions	6645.214	6538.794 6670.195 6645.214
+W02 update 20k disputes	1824.750	2611.799 1701.387 1824.750
+X01 index count	34
+X02 index size transaction / dispute / user	293 MB / 315 MB / 6592 kB
+W01 insert 200k transactions	6386.602	7324.417 6294.595 6386.602
+W02 update 20k disputes	2050.752	2875.730 2050.752 1847.518
+X01 index count	34
+X02 index size transaction / dispute / user	296 MB / 316 MB / 6592 kB

@@ -190,7 +190,7 @@ Nothing below is deployed; the step-by-step, including k8s manifests, is `docs/p
 | Area | Target | Why |
 | --- | --- | --- |
 | Production DB | Managed Postgres (RDS/Aurora Multi-AZ or Azure equivalent) | Automated failover + backups; RTO/RPO tradeoff |
-| Read replica | For the historic-disputes read path | Once write/read ratio justifies it — ties to the indexing story above |
+| Read replica | For the historic-disputes read path | Once write/read ratio justifies it. Every list read is already an index seek of about 1–3 ms at 2.2M transactions (`docs/list-query-performance.md`), so a replica would buy read capacity, not page speed |
 | Load balancing | ALB/API Gateway → ECS/Fargate or k8s Ingress in front of the stateless API | Meaningful only *because* the API is stateless; also the stable domain the frontend is built against, so infra can move behind it without invalidating an already-built client bundle (`docs/production-runbook.md` §3) |
 | Event durability | Move the status-change event to SQS/EventBridge | Today it's in-process/simulated; production shouldn't let a notification-consumer failure touch the API request path |
 | Session-lookup cost | Short-TTL cache on the session read, or Better Auth's cookie-cache/JWT session mode | The load test (`docs/progress-and-decisions.md` #48) shows the DB-backed session check, not Postgres or Fastify, is the authenticated-route ceiling — mitigate the read, don't move state back into the process |

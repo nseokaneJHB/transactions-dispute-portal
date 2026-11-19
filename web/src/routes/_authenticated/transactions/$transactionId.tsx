@@ -136,11 +136,11 @@ export const Route = createFileRoute(
 	component: TransactionDetailPage,
 	loader: async ({ context, params }) => {
 		const [transaction, disputes] = await Promise.all([
-			context.queryClient.ensureQueryData({
+			context.queryClient.fetchQuery({
 				queryKey: [...QUERY_KEYS.TRANSACTION, params.transactionId],
 				queryFn: () => transactionRequest({ data: params.transactionId }),
 			}),
-			context.queryClient.ensureQueryData({
+			context.queryClient.fetchQuery({
 				queryKey: [
 					...QUERY_KEYS.DISPUTES,
 					{ transaction_id: params.transactionId },

@@ -21,7 +21,7 @@ export const UserModel = pgTable(
 		id: uuid("id").primaryKey().default(sql`uuidv7()`),
 		image: text("image"),
 		name: varchar("name", { length: 255 }).notNull(),
-		email: varchar("email", { length: 255 }).notNull().unique(),
+		email: varchar("email", { length: 255 }).notNull(),
 		email_verified: boolean("email_verified").default(false).notNull(),
 
 		role: userRoleEnum("role").default(USER_ROLE.CUSTOMER).notNull(),
@@ -35,10 +35,8 @@ export const UserModel = pgTable(
 			.$onUpdate(() => sql`now()`),
 	},
 	(table) => [
-		index("user_role_idx").on(table.role),
-		index("user_updated_idx").on(table.updated_at),
-
 		uniqueIndex("user_email_uq_idx").on(table.email),
+		index("user_name_idx").on(table.name),
 	],
 );
 

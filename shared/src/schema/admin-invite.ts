@@ -7,13 +7,29 @@ import {
 	uuidSchema,
 } from "./field.js";
 import {
+	CURSOR_ORDER_ISSUE,
 	globalResponseSchema,
+	isCursorForOrder,
 	isOrderedDateRange,
 	ORDERED_DATE_RANGE_ISSUE,
 	paginatedGlobalResponseSchema,
 	paginationQuerySchema,
+	seekIntegerSchema,
+	seekTextSchema,
+	seekTimestampSchema,
 } from "./global.js";
 import { ADMIN_INVITE_SORT } from "../constant.js";
+
+/** The sort value an invites `cursor` carries, per `sort` — `status` is a derived rank, not a column. */
+const ADMIN_INVITE_SEEK_VALUES: Record<
+	keyof typeof ADMIN_INVITE_SORT,
+	z.ZodType
+> = {
+	[ADMIN_INVITE_SORT.email]: z.tuple([seekTextSchema]),
+	[ADMIN_INVITE_SORT.status]: z.tuple([seekIntegerSchema]),
+	[ADMIN_INVITE_SORT.created_at]: z.tuple([seekTimestampSchema]),
+	[ADMIN_INVITE_SORT.expires_at]: z.tuple([seekTimestampSchema]),
+};
 
 /**
  * Body for `POST /v1/admin/invites` — an existing admin invites a new admin by
@@ -59,7 +75,11 @@ export const adminInvitesQuerySchema = paginationQuerySchema
 			.optional()
 			.describe("Column to sort the page by — defaults to `created_at`"),
 	})
-	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE);
+	.refine(isOrderedDateRange, ORDERED_DATE_RANGE_ISSUE)
+	.refine(
+		isCursorForOrder(ADMIN_INVITE_SEEK_VALUES, ADMIN_INVITE_SORT.created_at),
+		CURSOR_ORDER_ISSUE,
+	);
 
 /**
  * One invite on the wire. The `token` is never returned — it only ever travels

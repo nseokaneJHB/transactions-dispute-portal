@@ -155,7 +155,7 @@ export const Route = createFileRoute("/_authenticated/admin/invites")({
 	validateSearch: adminInvitesQuerySchema,
 	loaderDeps: ({ search }) => search,
 	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData({
+		context.queryClient.fetchQuery({
 			queryKey: [...QUERY_KEYS.ADMIN_INVITES, deps],
 			queryFn: () => adminInvitesRequest({ data: deps }),
 		}),

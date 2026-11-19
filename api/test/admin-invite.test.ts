@@ -53,8 +53,8 @@ describe("admin invites", () => {
 
 		expect(response.statusCode).toBe(200);
 		const body = response.json();
-		expect(body).toMatchObject({ page: 1, limit: 10 });
-		expect(typeof body.count).toBe("number");
+		expect(body).toMatchObject({ limit: 10, prev_cursor: null });
+		expect(body).not.toHaveProperty("count");
 
 		const invites = body.data as Array<{
 			email: string;

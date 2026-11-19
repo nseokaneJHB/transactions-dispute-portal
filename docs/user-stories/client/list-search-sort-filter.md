@@ -7,7 +7,8 @@ list endpoints — see `docs/user-stories/admin/list-search-sort-filter.md`.
 
 | Key | Meaning |
 | --- | --- |
-| `page`, `limit` | 1-based page + size (default 1 / 10, `limit` capped at 100). Always present in the URL. |
+| `limit` | page size (default 10, capped at 100); the pager offers 10 / 25 / 50 / 100. Always present in the URL. |
+| `cursor` | which page: absent for the first, a `next_cursor` / `prev_cursor` from the previous response for its neighbours, `last` for the final page. No page numbers and no total (`docs/progress-and-decisions.md` #69). A cursor from another `sort` / `order` or list, or edited by hand, is a `422`. |
 | `search` | case-insensitive substring across that list's text columns; `%` / `_` / `\` the user types are matched literally. Omitted from the URL unless set. |
 | `from`, `to` | inclusive `YYYY-MM-DD` bounds on the list's date column (`from` snaps to start-of-day, `to` to end-of-day). |
 | `min_amount_cents`, `max_amount_cents` | inclusive bounds on the transaction amount in ZAR cents (for disputes, the disputed transaction's); non-negative integers, `min ≤ max` or `422`. The UI sets them with a two-thumb Rand slider in the Filters modal (R0 to R25,000; a thumb at either end leaves that side unbounded). |
@@ -20,10 +21,13 @@ is in `shared`. On the web side, `sort` / `order` are driven by **clicking a
 column header** (`SortableHeader`) — a 3-state cycle: 1st click desc, 2nd asc,
 3rd clears — not a dropdown. `ListControls` is a search box plus a **Filters** modal (status pills, date range, amount slider) and
 applies on submit. URL key order is fixed by a custom `stringifySearch` in
-`router.tsx`: `page, limit, search, status, …, from, to, min_amount_cents, max_amount_cents, sort, order`.
+`router.tsx`: `limit, search, status, …, from, to, min_amount_cents, max_amount_cents, sort, order, cursor`.
 
-The response envelope for every list: `count` = full match total,
-`total` = rows on this page, plus `page` / `limit`.
+The response envelope for every list: `total` = rows on this page, `limit`,
+and `next_cursor` / `prev_cursor` (`null` where there is no page that way).
+The pager is First / Prev / Next / Last plus Rows per page; changing a filter
+or the sort drops the cursor, and the cursor stays in the URL so Back and a
+reload return to the same page.
 
 An invalid `from > to` range, or an unlisted `sort` value — see
 *invalid date range* (below) and

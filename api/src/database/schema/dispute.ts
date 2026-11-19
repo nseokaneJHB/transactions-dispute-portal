@@ -49,13 +49,25 @@ export const DisputeModel = pgTable(
 			.references(() => TransactionModel.id, { onDelete: "cascade" }),
 	},
 	(table) => [
-		index("dispute_user_id_idx").on(table.user_id),
-		index("dispute_status_idx").on(table.status),
-		index("dispute_reason_idx").on(table.reason),
 		index("dispute_resolved_by_idx").on(table.resolved_by),
 		index("dispute_transaction_id_idx").on(table.transaction_id),
 		index("dispute_created_at_idx").on(table.created_at),
-		index("dispute_updated_idx").on(table.updated_at),
+		index("dispute_user_created_idx").on(
+			table.user_id,
+			table.created_at,
+			table.id,
+		),
+		index("dispute_status_created_idx").on(
+			table.status,
+			table.created_at,
+			table.id.desc().nullsFirst(),
+		),
+		index("dispute_user_status_idx").on(
+			table.user_id,
+			table.status,
+			table.id,
+		),
+		index("dispute_status_id_idx").on(table.status, table.id),
 
 		uniqueIndex("dispute_open_per_transaction_uq_idx")
 			.on(table.transaction_id)

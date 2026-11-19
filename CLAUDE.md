@@ -20,6 +20,7 @@ Solo submission for Nolan's internal promotion evaluation to Software Engineer I
 - `docs/infrastructure.md` — how everything connects: container topology, data model, the request-flow diagram, the target cloud/k8s shape
 - `docs/dev-tools.md` — ntfy and Mailpit: why/how they're used in dev, scope boundary vs. auth-credential delivery, what replaces them in production
 - `docs/user-stories.md` + `docs/user-stories/` — every user-facing flow (and every distinct error case) walked end to end, one file each: role, screens, API calls, DB changes, side effects. Read for *how the system behaves*; `progress-and-decisions.md` for *why*.
+- `docs/list-query-performance.md` — measured evidence for the list-query rework (#68–#70): the same queries at 2.2M transactions before any change, after the index refactor, and now; raw results and rerunnable scripts in `docs/list-query-performance/`
 - `docs/codebase-index.md` — per-file map of the repo (what lives where). Check before grepping/exploring the tree from scratch.
 - `docs/production-runbook.md` — this repo is dev-only (one `compose.yml`, one dev `Dockerfile` per package); the runbook is the step-by-step for making it production-ready (multi-stage images, real secrets, migrations as a gated step, a deploy pipeline, k8s)
 

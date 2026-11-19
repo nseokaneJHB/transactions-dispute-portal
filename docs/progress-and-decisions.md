@@ -2,7 +2,7 @@
 
 ## Progress
 
-Feature-complete. The Fastify API covers auth (email-OTP sign-in, session endpoint, two-step email change), transactions, disputes (submit/list/detail/withdraw), the admin review → resolve flow, and invite-only admin accounts. It's backed by a 71-test Vitest integration suite that runs in CI against real Postgres + Mailpit. `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy (12 unit tests). Every flow has been walked by hand in a browser as both roles.
+Feature-complete. The Fastify API covers auth (email-OTP sign-in, session endpoint, two-step email change), transactions, disputes (submit/list/detail/withdraw), the admin review → resolve flow, and invite-only admin accounts. It's backed by a 92-test Vitest integration suite that runs in CI against real Postgres + Mailpit. `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy (12 unit tests). Every flow has been walked by hand in a browser as both roles. After the SE II panel asked how the lists would cope with millions of rows, the list queries were reworked and measured at 2.2M transactions / 1.05M disputes: every list page, at any depth and on any sort, is now an index seek of about 0.3–3 ms (#68–#70, `docs/list-query-performance.md`).
 
 ### Definition of done
 
@@ -76,7 +76,7 @@ Public and admin routes live under `/v1/`. Health checks (`/healthz`, `/readyz`)
 
 ## 22. API response envelope: `globalResponseSchema` / `paginatedGlobalResponseSchema`
 
-Every response is `{ code, message, redirectUrl?, errors? }`, and lists add `page`/`limit`/`count`/`total`. Endpoints `.extend({ data })`. It lives in `shared`, so client and server can't drift.
+Every response is `{ code, message, redirectUrl?, errors? }`, and lists add `limit`/`total`/`next_cursor`/`prev_cursor` (#69). Endpoints `.extend({ data })`. It lives in `shared`, so client and server can't drift.
 
 ## 23. DB: Postgres, not MySQL
 
@@ -164,11 +164,11 @@ The email address *is* the credential (#21), so redirecting it is the whole atta
 
 ## 51. Frontend architecture: session-gated route tree, loaders for every fetch, one API client
 
-A `beforeLoad` root guard seeds the session once per navigation, and two layout routes split by role via redirect, not conditional render. Every read is a route loader + `ensureQueryData`, keyed on `loaderDeps`. One axios instance normalizes every failure into one `ApiError`. Its `baseURL` is `SERVER_API_URL` during SSR (container-to-container) and `VITE_API_URL` in the browser. `useDisputeNotifications` opens an `EventSource` on the user's ntfy topic. Fetching the session in a `useEffect` was rejected: `CLAUDE.md` rules it out, and it would flash an unauthenticated state.
+A `beforeLoad` root guard seeds the session once per navigation, and two layout routes split by role via redirect, not conditional render. Every read is a route loader + `fetchQuery`, keyed on `loaderDeps` (#71). One axios instance normalizes every failure into one `ApiError`. Its `baseURL` is `SERVER_API_URL` during SSR (container-to-container) and `VITE_API_URL` in the browser. `useDisputeNotifications` opens an `EventSource` on the user's ntfy topic. Fetching the session in a `useEffect` was rejected: `CLAUDE.md` rules it out, and it would flash an unauthenticated state.
 
 ## 52. After a mutation, `refreshQuery()` removes the cache entry rather than invalidating it
 
-Loaders read through `ensureQueryData`, which only checks for `data === undefined`, and no live `useQuery` observes those queries. So `invalidateQueries` leaves the UI stale. `refreshQuery(queryClient, router, keys)` calls `removeQueries` and then `router.invalidate()`, so the rerun loader genuinely refetches. Every mutation goes through this one helper.
+No live `useQuery` observes the loaders' queries (pages read `Route.useLoaderData()`), so `invalidateQueries`, whose default `refetchType` is `"active"`, refetches nothing, and a forced refetch fails for an SSR-hydrated entry, which has no `queryFn` on the client. `refreshQuery(queryClient, router, keys)` calls `removeQueries` and then `router.invalidate()`, so the rerun loader finds nothing cached and fetches with its own `queryFn`. Removing also drops every cached variant of a list (other filters, sorts and cursors) and covers the root session read, which still uses `ensureQueryData`. Every mutation goes through this one helper.
 
 ## 53. Every dispute carries its transaction's merchant, amount and date
 
@@ -176,7 +176,7 @@ Loaders read through `ensureQueryData`, which only checks for `data === undefine
 
 ## 57. One shared list query across every list endpoint
 
-`shared`'s `paginationQuerySchema` (`page`, `limit ≤ 100`, `search`, `from`/`to`, `order`) is extended per endpoint with its own filters (transactions and both dispute lists add an inclusive `min_amount_cents`/`max_amount_cents` range, `min ≤ max` or `422`) and a **whitelisted** `sort` enum, so an unlisted value is a `422`, never an interpolated column. Column binding lives in each repository. Small helpers (`containsText`, `withinDays`, `withinAmount`, `sortDirection`) cover the repeated logic. On the web, `<DataList>` (controls + sortable table + pagination) is shared by all four list pages. A generic `buildListQuery()` DSL was rejected because the four queries differ too much in joins and scoping.
+`shared`'s `paginationQuerySchema` (`limit ≤ 100`, `cursor`, `search`, `from`/`to`, `order`) is extended per endpoint with its own filters (transactions and both dispute lists add an inclusive `min_amount_cents`/`max_amount_cents` range, `min ≤ max` or `422`) and a **whitelisted** `sort` enum, so an unlisted value is a `422`, never an interpolated column. Column binding lives in each repository. Small helpers (`containsText`, `withinDays`, `withinAmount`, and `keyset` / `sortedBy` for paging, #69) cover the repeated logic. On the web, `<DataList>` (controls + sortable table + pagination) is shared by all four list pages. A generic `buildListQuery()` DSL was rejected because the four queries differ too much in joins and scoping.
 
 ## 58. Review queue: unresolved disputes first by default, stat cards from their own endpoint
 
@@ -197,3 +197,47 @@ With no explicit `sort`, the queue orders `status ASC, created_at ASC`. The enum
 **Problem:** The ntfy message body was just the new status, so the toast said "one of your disputes is now Under review" and the customer had to filter the list to find which one.
 
 **Decision:** The api publishes `{ dispute_id, status }` (`shared`'s `disputeNotificationSchema`). The browser refreshes that dispute's queries, fetches it through the session-scoped API to name the merchant and amount, and the toast's **View** action opens it. Putting the merchant and amount on the message itself was rejected: ntfy topics are unauthenticated, so anyone who learns a topic name could read them. A random id reveals nothing, and the details stay behind the session cookie. The cost is one extra `GET` per notification.
+
+## 68. Index only what a query uses; give each list its sort order
+
+**Problem:** The SE II panel's first question was how the paginated lists would cope with millions of rows. Reading every repository query against the schema found two things. The schema carried 36 secondary indexes plus three duplicate unique constraints (column-level `.unique()` *and* a `uniqueIndex` on `user.email` and both `token` columns), most on columns no query filters or sorts by (`updated_at` on every table, `dispute.reason`, `auth_audit_log.event`), each one a cost on every write. And no index matched the dispute lists' own order, so the admin queue sorted the whole table for every page.
+
+**Decision:** An index stays only if a repository query uses it or it backs a foreign key that is deleted through. Migration `0001` drops 18 indexes and the three duplicate constraints, and adds `dispute (user_id, created_at, id)` for the customer list and `dispute (status, created_at, id DESC)`, which is exactly the review queue's default order (#58). 48 indexes → 29. The match count was capped at 10,001 rows at the same time.
+
+**Measured** (`docs/list-query-performance.md`): the admin queue's first page 43 ms → 1.4 ms, its count 448 ms → 7.4 ms. Deep pages barely moved, which is what #69 is for.
+
+## 69. Cursor paging on every list; no page numbers, no total
+
+**Problem:** After #68, a deep page still cost what `OFFSET` costs: Postgres reads and throws away every row before the page (102 ms at row 10,000 of the admin queue, 3.3 s at row 500,000). The count ran beside every page just to print "1–10 of N", and was the slowest part of most requests (450 ms; 1.3 s with a search).
+
+**Decision:** Every list pages by cursor (keyset), on every sort. A cursor names the row a page starts after (or ends before): `direction~sort~order~value(s)~id`, each part URL-encoded. The page is `WHERE (sort key, id) > (cursor values) ORDER BY sort key, id LIMIT 11`: an index seek, the 11th row only saying whether a next page exists. `cursor=last` reads from the far end. `page`, the count, `count_capped` and the 10,000-row window are gone; the pager is First / Prev / Next / Last plus a rows-per-page picker (10 / 25 / 50 / 100). A cursor carries the `sort` / `order` it was issued for, and `shared` validates its values per sort, so a cursor from another sort, another list, or edited by hand is a `422`, not a database error. Timestamps travel as Postgres-printed text with microseconds, because a JS `Date` would round them and skip or repeat rows that share a millisecond.
+
+**Alternatives considered:** keeping offset for page-number jumps (rejected: it was the only slow path left and the page box looked broken past the window, "1001 / 1000"); "load more" (rejected: the position isn't in the URL, so reload, Back and a shared link lose it, the DOM grows, and a status change mid-session repeats or skips appended rows); cursors on the default order only (rejected: a sorted list is just as seekable — it only needs `id` as the tie-break); base64 JSON cursors (rejected: `shared` targets plain ES2022 with no DOM/Node types, so no `btoa`; per-part `encodeURIComponent` is enough and keeps cursors readable).
+
+**Tradeoff accepted:** no "page 437" and no total. Reviewers find rows by filter and search, which is how the queue is used; the status cards (#58) still give the totals that matter. Measured: every page 0.3–3 ms at any depth (`docs/list-query-performance.md`).
+
+## 70. Sort indexes chosen by `EXPLAIN`, and the seek bounded once
+
+**Problem:** With #69, sorted lists were correct but not index-backed: the admin queue sorted by amount, merchant or customer took 0.9–1.6 s, because those columns live on joined tables and no index on `dispute` can serve them.
+
+**Decision:** Nine candidate indexes were built on a 2.2M-transaction copy and kept only where the planner used them for a deep cursor page. Migration `0002` adds five: `transaction (amount_cents)`, `transaction (merchant_name)`, `user (name)` (the planner drives a nested loop from the joined table), `dispute (user_id, status, id)` and `dispute (status, id)`. Rejected candidates: per-customer `transaction (user_id, amount_cents | merchant_name, id)` (123–142 MB each; the small global indexes already served the heavy customer, and a normal customer's ~40 rows sort in a fraction of a millisecond), and widening two existing indexes with `id` (no measurable gain). The seek adds exactly **one** kind of range bound: a plain row comparison when the sort column is on the list's own table, an inclusive first-group bound for the review queue's mixed-direction order, a bound on the first key alone when it's on a joined table (a row value spanning two tables can't be an index condition). Two bounds on the same index's first column made Postgres start the scan at the looser one; that version took 435 ms on a deep queue page and was only found by timing the exact SQL the app emits, not hand-written equivalents (`docs/list-query-performance/scripts/capture-current.ts`).
+
+**Tradeoff accepted:** 144 MB of index at this scale and about +25% on bulk `transaction` inserts, which only the seed performs. The admin sort by customer is still 120–140 ms when one customer owns tens of thousands of disputes (`docs/list-query-performance.md`).
+
+**Migration naming:** drizzle-kit treats the snapshot whose file name sorts last as current. The hand-renamed `000_snapshot.json` sorted after `0001_`, so it was renamed `meta/0000_snapshot.json`; the journal and SQL are untouched.
+
+## 71. Loaders read with `fetchQuery`, so `staleTime` applies
+
+**Problem:** Loaders used `ensureQueryData`, which returns cached data whenever any exists and ignores `staleTime` and the invalidated flag (`@tanstack/query-core` `queryClient.js`). Back to a list showed the cached copy until the garbage collector removed it, 5 minutes by default, so another admin's change could stay hidden that long.
+
+**Decision:** Every data loader calls `queryClient.fetchQuery` with the same options. It returns the cached copy while it is younger than the client's 30-second `staleTime`, and fetches (awaited) once it is older or invalidated. Measured in the running app: Back within 30 s made no request; Forward after 40 s made one. The root session read in `beforeLoad` keeps `ensureQueryData`: the API checks the session on every request regardless, so the cached copy only drives redirects.
+
+**Alternatives considered:** `ensureQueryData({ revalidateIfStale: true })` starts a background refetch, but nothing observes the cache, so the page would never show its result. Reading with `useSuspenseQuery` in each component (an observer, so `invalidateQueries` and background refetch both work) is the larger change; it remains an option if a page needs live-updating data.
+
+## 72. The development query log redacts parameters of the auth tables
+
+**Problem:** Drizzle's default logger prints every bound parameter, so `docker compose logs api` showed raw session tokens from the session lookup that runs on every authenticated request, plus OTP and invite values.
+
+**Decision:** `api/src/database/query-logger.ts`'s `redactingLogger` keeps Drizzle's `Query: <sql> -- params: [...]` line but prints `[n redacted]` for any query on `session`, `verification`, `account` or `admin_invite` (table names from the schema via `getTableName`). The SQL text never holds a value, so it is always printed in full; every other query keeps its parameters for debugging. Production and tests still log no queries. Covered by `api/test/query-logger.test.ts`.
+
+**Alternatives considered:** Redacting every parameter loses the logger's main debugging value. Matching values that look like secrets is guesswork; the table is a reliable signal.

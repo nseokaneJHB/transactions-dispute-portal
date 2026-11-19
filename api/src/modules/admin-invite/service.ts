@@ -65,7 +65,7 @@ export const listInvites = async (
 	request: FastifyRequest<ListInvitesRequest>,
 	reply: FastifyReply<ListInvitesRequest>,
 ): Promise<void> => {
-	const { rows, total } = await findAdminInvitesByInviter(
+	const { rows, nextCursor, prevCursor } = await findAdminInvitesByInviter(
 		request.server.connection,
 		{ ...request.query, invitedBy: request.user!.id },
 	);
@@ -73,7 +73,8 @@ export const listInvites = async (
 	return reply.status(HTTP_RESPONSE_CODE.OK.status).send(
 		paginatedResponse({
 			query: request.query,
-			total,
+			nextCursor,
+			prevCursor,
 			rows: rows.map(toWire),
 			message: "Invites retrieved.",
 		}),

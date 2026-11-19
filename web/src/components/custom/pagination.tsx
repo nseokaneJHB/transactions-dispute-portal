@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from "react";
-
 import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
@@ -7,72 +5,79 @@ import {
 	ChevronsRightIcon,
 } from "lucide-react";
 
+import {
+	LAST_PAGE_CURSOR,
+	PAGE_SIZE_OPTIONS,
+} from "@transaction-dispute-portal/shared";
+
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 interface PaginationProps {
-	page: number;
+	/** The `?cursor=` the current page was reached by — unset on the first page. */
+	cursor: string | undefined;
+	/** The envelope's `next_cursor` / `prev_cursor` — `null` where there is no page that way. */
+	nextCursor: string | null;
+	prevCursor: string | null;
+	/** How many rows the current page holds. */
+	shown: number;
+	/** Rows per page — the route's `?limit=`. */
 	limit: number;
-	count: number;
-	onPageChange: (page: number) => void;
+	/** Move to the page `cursor` points at — `undefined` for the first page. */
+	onCursorChange: (cursor: string | undefined) => void;
+	onLimitChange: (limit: number) => void;
 }
 
 /**
- * Pager driven by the envelope's `count` (total matches) and `limit`: first /
- * prev / next / last jumps, plus a page-number box to go straight to any page.
+ * Pager driven by the envelope's cursors: first / prev / next / last, every
+ * one an index seek, so each page costs the same however deep it is. No page
+ * numbers and no total — the list is never counted. A page left empty by a
+ * stale cursor (its rows deleted since) keeps First and Last open so the
+ * reader can get back. The page-size picker keeps the cursor: a seek page
+ * starts at the same row whatever its size, so it just shows more or fewer
+ * rows from there. A hand-typed `?limit=` that isn't one of the steps is
+ * still shown as the current choice.
  */
 export const Pagination = ({
-	page,
+	cursor,
+	nextCursor,
+	prevCursor,
+	shown,
 	limit,
-	count,
-	onPageChange,
+	onCursorChange,
+	onLimitChange,
 }: PaginationProps) => {
-	const totalPages = Math.max(1, Math.ceil(count / limit));
-	const from = count === 0 ? 0 : (page - 1) * limit + 1;
-	const to = Math.min(page * limit, count);
+	const stranded = shown === 0 && cursor !== undefined;
+	const atStart = prevCursor === null && !stranded;
+	const atEnd = nextCursor === null && !stranded;
 
-	const [draft, setDraft] = useState(String(page));
-
-	/** `onPageChange` is a fresh arrow each render — read it through a ref so the debounce effect doesn't re-arm. */
-	const onPageChangeRef = useRef(onPageChange);
-	onPageChangeRef.current = onPageChange;
-
-	/** Re-sync the box whenever the page moves from a button (or elsewhere). */
-	useEffect(() => setDraft(String(page)), [page]);
-
-	const parsedDraft = Number(draft);
-	const draftIsValidPage =
-		Number.isInteger(parsedDraft) &&
-		parsedDraft >= 1 &&
-		parsedDraft <= totalPages;
-
-	/** Commit a valid page a short beat after typing stops — no Enter needed. */
-	useEffect(() => {
-		if (!draftIsValidPage || parsedDraft === page) return;
-		const timer = setTimeout(() => onPageChangeRef.current(parsedDraft), 600);
-		return () => clearTimeout(timer);
-	}, [draftIsValidPage, parsedDraft, page]);
-
-	const goToDraft = () => {
-		if (!draftIsValidPage) {
-			setDraft(String(page));
-			return;
-		}
-		if (parsedDraft !== page) onPageChange(parsedDraft);
-	};
+	const sizes = [...new Set<number>([...PAGE_SIZE_OPTIONS, limit])].sort(
+		(a, b) => a - b,
+	);
 
 	return (
 		<div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-			<p className="text-muted-foreground">
-				{count === 0 ? "No results" : `${from}–${to} of ${count}`}
-			</p>
+			<label className="text-muted-foreground flex items-center gap-2">
+				Rows per page
+				<Select
+					value={limit}
+					onChange={(event) => onLimitChange(Number(event.target.value))}
+					className="h-8 w-20"
+				>
+					{sizes.map((size) => (
+						<option key={size} value={size}>
+							{size}
+						</option>
+					))}
+				</Select>
+			</label>
 
 			<div className="flex items-center gap-2">
 				<Button
 					variant="secondary"
 					size="sm"
-					disabled={page <= 1}
-					onClick={() => onPageChange(1)}
+					disabled={atStart}
+					onClick={() => onCursorChange(undefined)}
 					aria-label="First page"
 				>
 					<ChevronsLeftIcon />
@@ -80,38 +85,17 @@ export const Pagination = ({
 				<Button
 					variant="secondary"
 					size="sm"
-					disabled={page <= 1}
-					onClick={() => onPageChange(page - 1)}
+					disabled={prevCursor === null}
+					onClick={() => onCursorChange(prevCursor ?? undefined)}
 				>
 					<ChevronLeftIcon />
 					Prev
 				</Button>
-
-				<span className="text-muted-foreground flex items-center gap-1.5 tabular-nums">
-					<Input
-						type="number"
-						min={1}
-						max={totalPages}
-						value={draft}
-						onChange={(event) => setDraft(event.target.value)}
-						onBlur={goToDraft}
-						onKeyDown={(event) => {
-							if (event.key === "Enter") {
-								event.preventDefault();
-								goToDraft();
-							}
-						}}
-						aria-label="Page number"
-						className="h-8 w-14 px-2 text-center"
-					/>
-					/ {totalPages}
-				</span>
-
 				<Button
 					variant="secondary"
 					size="sm"
-					disabled={page >= totalPages}
-					onClick={() => onPageChange(page + 1)}
+					disabled={nextCursor === null}
+					onClick={() => onCursorChange(nextCursor ?? undefined)}
 				>
 					Next
 					<ChevronRightIcon />
@@ -119,8 +103,8 @@ export const Pagination = ({
 				<Button
 					variant="secondary"
 					size="sm"
-					disabled={page >= totalPages}
-					onClick={() => onPageChange(totalPages)}
+					disabled={atEnd}
+					onClick={() => onCursorChange(LAST_PAGE_CURSOR)}
 					aria-label="Last page"
 				>
 					<ChevronsRightIcon />

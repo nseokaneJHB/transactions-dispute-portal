@@ -30,7 +30,7 @@ export const listTransactions = async (
 	request: FastifyRequest<ListTransactionsRequest>,
 	reply: FastifyReply<ListTransactionsRequest>,
 ): Promise<void> => {
-	const { rows, total } = await findTransactionsByUser(request.server.connection, {
+	const { rows, nextCursor, prevCursor } = await findTransactionsByUser(request.server.connection, {
 		...request.query,
 		userId: request.user!.id,
 	});
@@ -38,7 +38,8 @@ export const listTransactions = async (
 	return reply.status(HTTP_RESPONSE_CODE.OK.status).send(
 		paginatedResponse({
 			query: request.query,
-			total,
+			nextCursor,
+			prevCursor,
 			rows: rows.map(toWire),
 			message: "Transactions retrieved.",
 		}),

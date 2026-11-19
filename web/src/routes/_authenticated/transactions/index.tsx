@@ -81,7 +81,7 @@ export const Route = createFileRoute("/_authenticated/transactions/")({
 	validateSearch: transactionsQuerySchema,
 	loaderDeps: ({ search }) => search,
 	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData({
+		context.queryClient.fetchQuery({
 			queryKey: [...QUERY_KEYS.TRANSACTIONS, deps],
 			queryFn: () => transactionsRequest({ data: deps }),
 		}),

@@ -4,10 +4,26 @@ export const APP_NAME = "Transactions Dispute Portal" as const;
 export const BUSINESS_TIMEZONE = "Africa/Johannesburg" as const;
 
 export const DEFAULT_PAGE_LIMIT = 10 as const;
-export const DEFAULT_PAGE_NUMBER = 1 as const;
 export const MAX_PAGE_LIMIT = 100 as const;
 
+/** The page sizes the list pager offers. The API takes any `limit` from 1 to `MAX_PAGE_LIMIT`; these are the steps worth a click. */
+export const PAGE_SIZE_OPTIONS = [
+	DEFAULT_PAGE_LIMIT,
+	25,
+	50,
+	MAX_PAGE_LIMIT,
+] as const;
+
 export const ORDER_DIRECTION = { asc: "asc", desc: "desc" } as const;
+
+/** Which way a list `cursor` seeks from its row: `next` to the rows after it, `prev` to the rows before it. */
+export const CURSOR_DIRECTION = { next: "next", prev: "prev" } as const;
+
+/** The `?cursor=` value for a list's final page — read from the far end, so it costs the same however long the list is. */
+export const LAST_PAGE_CURSOR = "last" as const;
+
+/** The `sort` a review-queue cursor carries when no `sort` was asked for: the queue's own work-list order. */
+export const REVIEW_QUEUE_ORDER = "queue" as const;
 
 /**
  * The columns each list endpoint allows `?sort=` to name. A whitelist, not a

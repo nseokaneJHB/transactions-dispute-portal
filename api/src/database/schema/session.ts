@@ -16,7 +16,7 @@ export const SessionModel = pgTable(
 		id: uuid("id").primaryKey().default(sql`uuidv7()`),
 		user_agent: varchar("user_agent", { length: 255 }),
 		ip_address: varchar("ip_address", { length: 255 }),
-		token: varchar("token", { length: 255 }).notNull().unique(),
+		token: varchar("token", { length: 255 }).notNull(),
 		expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
 
 		created_at: timestamp("created_at", { withTimezone: true })
@@ -33,7 +33,6 @@ export const SessionModel = pgTable(
 	},
 	(table) => [
 		index("session_user_id_idx").on(table.user_id),
-		index("session_updated_idx").on(table.updated_at),
 		index("session_expires_at_idx").on(table.expires_at),
 
 		uniqueIndex("session_token_uq_idx").on(table.token),
