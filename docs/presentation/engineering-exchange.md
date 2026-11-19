@@ -137,7 +137,7 @@ If we stopped using it, what gap is left?"
 | Library | What it does in this repo | Where |
 |---|---|---|
 | **TanStack Router** | Typed routes. Search params are parsed by the **same Zod schema** the API uses (`validateSearch: adminDisputesQuerySchema`) | `web/src/routes/**` |
-| **TanStack Query** | The in-memory cache. Each route loader calls `ensureQueryData` with a key like `["admin","disputes",{limit,cursor}]` | loaders, `web/src/lib/query.ts` |
+| **TanStack Query** | The in-memory cache. Each route loader calls `fetchQuery` with a key like `["admin","disputes",{limit,cursor}]` | loaders, `web/src/lib/query.ts` |
 | **TanStack Start** | Server-side rendering, plus **server functions** (`createServerFn`): code in `web/src/api/*.ts` that always runs on the web server | `web/src/api/*.ts` |
 
 ---
@@ -148,13 +148,13 @@ If we stopped using it, what gap is left?"
 |---|---|---|
 | **Full page load or reload** | Only the HTML document request. **No data request at all.** | The web server, while rendering the page |
 | **Navigating in the app** (Next, a filter, a sort) | `GET :3000/_serverFn/<id>?payload=…`, sent **to the web server, not the API** | The web server, server to server |
-| **Back to a page already visited** | **Nothing.** Served from the Query cache | Nobody |
+| **Back to a page fetched under 30 s ago** | **Nothing.** Served from the Query cache. Older than 30 s: the same `_serverFn` GET as navigating | Nobody, or the web server |
 | **A write** (submit, withdraw, review, resolve) | `POST :8080/v1/…` with a JSON body, **straight to the API** | The browser |
 
 Measured in Chrome:
 - **Reload of `/admin`:** 10 rows rendered, 0 `_serverFn` requests, 0 requests to `:8080`.
 - **Next:** exactly one `_serverFn` GET.
-- **Back:** no new requests.
+- **Back within 30 s:** no new requests. **Forward 40 s later:** one request.
 
 ---
 
@@ -294,45 +294,49 @@ What each TanStack Query call does to a cached list:
 | `invalidateQueries` | Marks it stale, then refetches only queries a mounted `useQuery` is watching (`refetchType: "active"` by default) | Nothing is watched: pages read through `Route.useLoaderData()`. **No refetch; the old list stays** |
 | `refetchQueries` | Refetches now, with the stored query function | Fails for data fetched during the server render: functions don't survive the hand-over to the browser (from the `refreshQuery` JSDoc, #52) |
 | `resetQueries` | Puts the entry back to its initial state, then refetches active queries | Same "no watcher" problem |
-| **`removeQueries` + `router.invalidate()`** | **Deletes the entry, then reruns the route loaders** | The loader's `ensureQueryData` finds nothing cached and fetches. **Fresh data, every time** |
+| **`removeQueries` + `router.invalidate()`** | **Deletes the entry, then reruns the route loaders** | The loader's `fetchQuery` finds nothing cached and fetches. **Fresh data, every time** |
 
 ---
 
-## Why `invalidateQueries` alone leaves the screen stale
+## Loader reads: `ensureQueryData` vs `fetchQuery`
 
 From `@tanstack/query-core` 5.100.14, `queryClient.js`:
 
 ```js
 ensureQueryData(options) {
-  const cachedData = query.state.data;
-  if (cachedData === void 0) return this.fetchQuery(options);   // only fetches when nothing is cached
+  if (query.state.data === void 0) return this.fetchQuery(options);  // fetches only when nothing is cached
   if (options.revalidateIfStale && query.isStaleByTime(...)) void this.prefetchQuery(...);
-  return Promise.resolve(cachedData);                           // otherwise: cached data, stale or not
+  return Promise.resolve(query.state.data);                          // otherwise: cached, however old
+}
+fetchQuery(options) {
+  return query.isStaleByTime(resolveStaleTime(options.staleTime, query))  // older than staleTime, or invalidated?
+    ? query.fetch(options)                                                // then fetch, and wait for it
+    : Promise.resolve(query.state.data);
 }
 ```
 
-1. `invalidateQueries` marks the entry stale, but no `useQuery` is watching it, so nothing refetches.
-2. `router.invalidate()` reruns the loader.
-3. The loader calls `ensureQueryData`, which **still returns the old data**, because the entry exists.
-
-Removing the entry is the only one of these calls that makes `ensureQueryData` fetch.
-
-**The idiomatic alternative a reviewer will raise:**
-- Keep `ensureQueryData` in the loader, but read the data in the component with `useSuspenseQuery(sameOptions)` instead of `useLoaderData()`.
-- That gives the cache a watcher, so a plain `invalidateQueries` would work and `staleTime` would apply.
-- `refreshQuery` is the cost of reading through `useLoaderData`. Switching is a reasonable follow-up.
+- **Before this PR**, every loader used `ensureQueryData`.
+  - The 30-second `staleTime` never applied, and neither did `invalidateQueries`.
+  - Back showed the cached list until the garbage collector removed it, 5 minutes later. Another admin's change could stay hidden that long.
+- **Now** every data loader uses `fetchQuery` (decision #71). Measured in Chrome on the review queue:
+  - Back within 30 s: **0 requests**;
+  - Forward 40 s later: **1 request**, fresh data.
+- **Why not `revalidateIfStale: true`?** It starts a background fetch, but nothing watches the cache, so the page would never show the result.
 
 ---
 
-## Caveat: how stale can a list get?
+## Why `refreshQuery` still removes rather than invalidates
 
-- The 30-second `staleTime` in `query-provider.tsx` **never applies to loader reads**: `ensureQueryData` ignores staleness unless `revalidateIfStale: true` is passed.
-- So pressing Back to a list shows the cached copy until Query's garbage collector removes it: **5 minutes by default** (`gcTime`, not overridden).
-- **What limits the risk today:**
-  - every write in the app calls `refreshQuery`;
-  - live ntfy notifications call `refreshQuery` when a dispute's status changes.
-- **Still not covered:** another admin's change, made in another browser, while you sit on a cached page.
-- **Fix, if wanted:** add `revalidateIfStale: true` to the list loaders. The cached page shows immediately and a background refetch replaces it. That's a small change, not made in this PR.
+With `fetchQuery` loaders, `invalidateQueries` + `router.invalidate()` would now refetch the visible list. `removeQueries` is still the better fit:
+
+- **It drops every cached variant of the list**: other filters, sorts and cursors. Invalidating would keep their data and rely on every reader checking the flag.
+- **It also works for the root session read,** which still uses `ensureQueryData`: the API checks the session on every request anyway, so that cached copy only drives redirects.
+- **It never relies on a stored `queryFn`.** An entry hydrated from the server render has none on the client.
+
+**The idiomatic alternative a reviewer will raise:**
+- Read with `useSuspenseQuery(sameOptions)` in the component instead of `useLoaderData()`.
+- That gives the cache a watcher: `invalidateQueries` and background refetches then update the screen live.
+- It's a bigger change, worth it for a page that must update while you're looking at it.
 
 ---
 
@@ -474,7 +478,7 @@ The role is read fresh on every request, so demoting a user takes effect on thei
 
 ## Auth caveats, before someone asks
 
-- **The dev query log prints session tokens.** Drizzle's logger writes bound parameters as-is, so `docker compose logs api` shows the raw token from step 3. That's why the logger is off outside development; production would need a logger that redacts parameters.
+- **Fixed in this PR: the dev query log printed session tokens.** Drizzle's default logger wrote bound parameters as-is. The dev logger now redacts parameters on the auth tables (#72); production and tests log no queries.
 - **Tokens are stored as-is** in `session.token`, which is Better Auth's default. Anyone who can read the database can take over live sessions; restrict who can read it.
 - **One database round trip per request, for the session and user lookups.** The load test (#48) showed this is the ceiling for signed-in routes. The fix is Better Auth's `cookieCache` or a short-lived session cache, at the cost of role changes taking effect after a delay.
 - **Production cookie domain is still to decide.** With `app.` and `api.` subdomains, the API's cookie must still reach the web server. The two options are a shared parent domain or one origin behind a proxy (`docs/production-runbook.md`, decision still open).
@@ -534,13 +538,13 @@ That's the cursor seek, with the extra 11th row used to tell whether a next page
 
 ## Three ways to see the SQL
 
-1. **Logged in development.** `drizzle(client, { logger: !isProduction && !isTesting })` in `api/src/database/config.ts`.
+1. **Logged in development.** `api/src/database/config.ts` passes `redactingLogger` (`query-logger.ts`), which prints every query as `Query: <sql> -- params: [...]`.
 2. **Without running the query.** `.toSQL()` on any query returns `{ sql, params }`.
 3. **Captured for benchmarking.** `docs/list-query-performance/scripts/capture-current.ts` swaps in a logger, calls the real repository functions and times the exact SQL. That's how the 435 ms regression was found.
 
 **Demo:** run `docker compose logs -f api | grep Query:`, then click Next and change the sort.
 
-**Caveat:** the logger prints parameters verbatim, including session tokens (section 3). Development only.
+**Fixed in this PR (#72):** Drizzle's default logger printed parameters verbatim, including the session token on every authenticated request. The logger now prints `[n redacted]` for queries on `session`, `verification`, `account` and `admin_invite`, so the session lookup logs as `… from "session" … -- params: [1 redacted]`. Other queries keep their parameters. Production and tests log no queries.
 
 ---
 
@@ -729,7 +733,7 @@ The highs include `fast-uri`, `axios`, `nodemailer`, `fastify`, `seroval` and `v
   - A mobile app, a back-office tool or another bank system can call `/v1` directly.
   - In Next, the API tends to grow inside the web app.
 - **One contract both sides compile against** (the Zod schemas in `shared`). Server Actions are typed inside one app, but they aren't a contract another client can use.
-- **Caching you can see.** One cache, named keys, one refresh helper. It has a known stale window (section 2), which can be fixed with one flag.
+- **Caching you can see.** One cache, named keys, a 30-second freshness window and one refresh helper (section 2).
 - **Auth lives in one place.** Only the API reads the session; the web server just passes the cookie through (section 3).
 - **Independent scaling and deploys:** the API is stateless (`docs/infrastructure.md`).
 - **The costs:**
@@ -756,16 +760,16 @@ The highs include `fast-uri`, `axios`, `nodemailer`, `fastify`, `seroval` and `v
 | Why no total count? | Counting a million rows on every page cost 450 ms. Nobody needs "page 43,712 of 105,000"; the status cards give the totals that matter |
 | What if a row is inserted while paging? | A cursor names a row, not a position, so nothing repeats or is skipped (unlike `OFFSET`) |
 | Why does the Network tab show `/_serverFn/…`? | Reads are TanStack server functions: an RPC call to the web server, which calls the API server to server (section 2) |
-| Why `removeQueries` and not `invalidateQueries`? | Nothing watches our queries, and `ensureQueryData` returns cached data even when it's stale (section 2) |
+| Why `removeQueries` and not `invalidateQueries`? | Nothing watches our queries, and removing drops every cached variant and works for every kind of read (section 2) |
 | Where is the user's identity? | In the database. The cookie is a signed, random token; each request looks it up (section 3) |
 | Can the web server pretend to be someone else? | It only forwards the browser's cookie. The API checks the signature and the session row |
 | Why not raw SQL? | Postgres runs the same statement either way, and Drizzle adds types. Measured difference: microseconds |
-| What would you do next? | An audit step in CI, the upgrades, `revalidateIfStale` on lists, a session cache, `pg_trgm` for search |
+| What would you do next? | An audit step in CI, the upgrades, a session cache, `pg_trgm` for search |
 
 ---
 
 # Thank you
 
 - Pagination evidence: `docs/list-query-performance.md`
-- Decisions: `docs/progress-and-decisions.md` (#21, #48, #51, #52, #68–#70)
+- Decisions: `docs/progress-and-decisions.md` (#21, #48, #51, #52, #68–#72)
 - This deck: `docs/presentation/engineering-exchange.md`

@@ -109,7 +109,7 @@ const DisputeDetailPage = () => {
 export const Route = createFileRoute("/_authenticated/disputes/$disputeId")({
 	component: DisputeDetailPage,
 	loader: ({ context, params }) =>
-		context.queryClient.ensureQueryData({
+		context.queryClient.fetchQuery({
 			queryKey: [...QUERY_KEYS.DISPUTE, params.disputeId],
 			queryFn: () => disputeRequest({ data: params.disputeId }),
 		}),

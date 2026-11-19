@@ -105,7 +105,7 @@ These run on the host. Keep the compose stack up: the api tests use its Postgres
 ```sh
 pnpm install
 pnpm lint && pnpm typecheck && pnpm build
-pnpm test        # 89 api integration tests (real OTP flow, real DB) + 12 web unit tests
+pnpm test        # 92 api tests (real OTP flow, real DB) + 12 web unit tests
 ```
 
 Don't run `pnpm test` *inside* the `api` container. Its `DATABASE_URL` points at the dev database, which the suite would reset.

@@ -13,7 +13,7 @@ The architecture and recurring patterns behind the TanStack Start app — not a 
 
 ## Data fetching pattern
 
-Every read is a route `loader` + `queryClient.ensureQueryData`, keyed on `loaderDeps` so pagination/filtering/sorting re-fetches on navigation instead of a `useEffect` watching search-param state (`docs/progress-and-decisions.md` #51). `src/router.tsx` wires a fresh `QueryClient` per router (`src/integrations/query-provider.tsx`) and `setupRouterSsrQueryIntegration`, which dehydrates the query cache into the SSR payload so the client doesn't re-fetch what the server already loaded.
+Every read is a route `loader` + `queryClient.fetchQuery`, keyed on `loaderDeps` so pagination/filtering/sorting re-fetches on navigation instead of a `useEffect` watching search-param state (`docs/progress-and-decisions.md` #51). `fetchQuery` serves the cached copy while it is younger than the client's 30-second `staleTime` and refetches once it is older or invalidated, so Back is instant for 30 s and fresh after (#71). The root session read alone keeps `ensureQueryData`. `src/router.tsx` wires a fresh `QueryClient` per router (`src/integrations/query-provider.tsx`) and `setupRouterSsrQueryIntegration`, which dehydrates the query cache into the SSR payload so the client doesn't re-fetch what the server already loaded.
 
 **One API client, one error type.** `src/api/index.ts` is the single axios instance. `ApiError`/`isApiError`/`normalizeAxiosError` collapse every failure — a server envelope, a network drop, anything else — into the same shape (`status`, `code`, `message`, `errors?`, `redirectUrl?`), so no component or mutation branches on axios's error shape versus the server's.
 
@@ -34,7 +34,7 @@ The distinction matters beyond dev convenience: `docs/production-runbook.md` §3
 
 After a mutation, `src/lib/query.ts`'s `refreshQuery(queryClient, router, queryKeys)` calls `queryClient.removeQueries({ queryKey })` for each key, then `router.invalidate()` (`docs/progress-and-decisions.md` #52).
 
-Why not `invalidateQueries`: every read here is `ensureQueryData` inside a loader, and nothing observes it the way a mounted `useQuery` would. So the default `refetchType: "active"` refetches nothing. `ensureQueryData` also only checks `data === undefined`, not invalidation state, so the rerun loader would hand back stale data. Forcing `refetchType: "all"` doesn't work either: an SSR-hydrated query has no `queryFn` client-side. Removing the entry makes the rerun loader's `ensureQueryData` do a real fetch with the `queryFn` it supplies itself.
+Why not `invalidateQueries`: pages read their data with `Route.useLoaderData()`, so no mounted `useQuery` observes the cache and the default `refetchType: "active"` refetches nothing. Forcing `refetchType: "all"` doesn't work either: an SSR-hydrated query has no `queryFn` client-side. Removing the entry makes the rerun loader's `fetchQuery` do a real fetch with the `queryFn` it supplies itself, drops every cached variant of the list, and also works for the root session read, which still uses `ensureQueryData` (ignores the invalidated flag).
 
 Every mutation site (`dispute-actions.tsx`'s review/resolve, `withdraw-button.tsx`, `dispute-form.tsx`, `use-dispute-notifications.ts`'s ntfy handler) goes through this one helper.
 

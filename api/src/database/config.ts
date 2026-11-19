@@ -3,6 +3,7 @@ import postgres from "postgres";
 
 import { env } from "../lib/env.js";
 import * as schema from "./schema/index.js";
+import { redactingLogger } from "./query-logger.js";
 
 interface GlobalSetup {
 	close: () => Promise<void>;
@@ -42,7 +43,7 @@ const initializeDatabase = (): GlobalSetup => {
 		connection: drizzle(client, {
 			schema,
 			casing: "snake_case",
-			logger: !isProduction && !isTesting,
+			logger: !isProduction && !isTesting ? redactingLogger : false,
 		}),
 	};
 };

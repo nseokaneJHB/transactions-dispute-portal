@@ -2,7 +2,7 @@
 
 ## Progress
 
-Feature-complete. The Fastify API covers auth (email-OTP sign-in, session endpoint, two-step email change), transactions, disputes (submit/list/detail/withdraw), the admin review → resolve flow, and invite-only admin accounts. It's backed by an 89-test Vitest integration suite that runs in CI against real Postgres + Mailpit. `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy (12 unit tests). Every flow has been walked by hand in a browser as both roles. After the SE II panel asked how the lists would cope with millions of rows, the list queries were reworked and measured at 2.2M transactions / 1.05M disputes: every list page, at any depth and on any sort, is now an index seek of about 0.3–3 ms (#68–#70, `docs/list-query-performance.md`).
+Feature-complete. The Fastify API covers auth (email-OTP sign-in, session endpoint, two-step email change), transactions, disputes (submit/list/detail/withdraw), the admin review → resolve flow, and invite-only admin accounts. It's backed by a 92-test Vitest integration suite that runs in CI against real Postgres + Mailpit. `web` is a TanStack Start app with a session-gated route tree, loader-driven data fetching, one typed API client, and live dispute-status toasts over ntfy (12 unit tests). Every flow has been walked by hand in a browser as both roles. After the SE II panel asked how the lists would cope with millions of rows, the list queries were reworked and measured at 2.2M transactions / 1.05M disputes: every list page, at any depth and on any sort, is now an index seek of about 0.3–3 ms (#68–#70, `docs/list-query-performance.md`).
 
 ### Definition of done
 
@@ -164,11 +164,11 @@ The email address *is* the credential (#21), so redirecting it is the whole atta
 
 ## 51. Frontend architecture: session-gated route tree, loaders for every fetch, one API client
 
-A `beforeLoad` root guard seeds the session once per navigation, and two layout routes split by role via redirect, not conditional render. Every read is a route loader + `ensureQueryData`, keyed on `loaderDeps`. One axios instance normalizes every failure into one `ApiError`. Its `baseURL` is `SERVER_API_URL` during SSR (container-to-container) and `VITE_API_URL` in the browser. `useDisputeNotifications` opens an `EventSource` on the user's ntfy topic. Fetching the session in a `useEffect` was rejected: `CLAUDE.md` rules it out, and it would flash an unauthenticated state.
+A `beforeLoad` root guard seeds the session once per navigation, and two layout routes split by role via redirect, not conditional render. Every read is a route loader + `fetchQuery`, keyed on `loaderDeps` (#71). One axios instance normalizes every failure into one `ApiError`. Its `baseURL` is `SERVER_API_URL` during SSR (container-to-container) and `VITE_API_URL` in the browser. `useDisputeNotifications` opens an `EventSource` on the user's ntfy topic. Fetching the session in a `useEffect` was rejected: `CLAUDE.md` rules it out, and it would flash an unauthenticated state.
 
 ## 52. After a mutation, `refreshQuery()` removes the cache entry rather than invalidating it
 
-Loaders read through `ensureQueryData`, which only checks for `data === undefined`, and no live `useQuery` observes those queries. So `invalidateQueries` leaves the UI stale. `refreshQuery(queryClient, router, keys)` calls `removeQueries` and then `router.invalidate()`, so the rerun loader genuinely refetches. Every mutation goes through this one helper.
+No live `useQuery` observes the loaders' queries (pages read `Route.useLoaderData()`), so `invalidateQueries`, whose default `refetchType` is `"active"`, refetches nothing, and a forced refetch fails for an SSR-hydrated entry, which has no `queryFn` on the client. `refreshQuery(queryClient, router, keys)` calls `removeQueries` and then `router.invalidate()`, so the rerun loader finds nothing cached and fetches with its own `queryFn`. Removing also drops every cached variant of a list (other filters, sorts and cursors) and covers the root session read, which still uses `ensureQueryData`. Every mutation goes through this one helper.
 
 ## 53. Every dispute carries its transaction's merchant, amount and date
 
@@ -226,3 +226,18 @@ With no explicit `sort`, the queue orders `status ASC, created_at ASC`. The enum
 
 **Migration naming:** drizzle-kit treats the snapshot whose file name sorts last as current. The hand-renamed `000_snapshot.json` sorted after `0001_`, so it was renamed `meta/0000_snapshot.json`; the journal and SQL are untouched.
 
+## 71. Loaders read with `fetchQuery`, so `staleTime` applies
+
+**Problem:** Loaders used `ensureQueryData`, which returns cached data whenever any exists and ignores `staleTime` and the invalidated flag (`@tanstack/query-core` `queryClient.js`). Back to a list showed the cached copy until the garbage collector removed it, 5 minutes by default, so another admin's change could stay hidden that long.
+
+**Decision:** Every data loader calls `queryClient.fetchQuery` with the same options. It returns the cached copy while it is younger than the client's 30-second `staleTime`, and fetches (awaited) once it is older or invalidated. Measured in the running app: Back within 30 s made no request; Forward after 40 s made one. The root session read in `beforeLoad` keeps `ensureQueryData`: the API checks the session on every request regardless, so the cached copy only drives redirects.
+
+**Alternatives considered:** `ensureQueryData({ revalidateIfStale: true })` starts a background refetch, but nothing observes the cache, so the page would never show its result. Reading with `useSuspenseQuery` in each component (an observer, so `invalidateQueries` and background refetch both work) is the larger change; it remains an option if a page needs live-updating data.
+
+## 72. The development query log redacts parameters of the auth tables
+
+**Problem:** Drizzle's default logger prints every bound parameter, so `docker compose logs api` showed raw session tokens from the session lookup that runs on every authenticated request, plus OTP and invite values.
+
+**Decision:** `api/src/database/query-logger.ts`'s `redactingLogger` keeps Drizzle's `Query: <sql> -- params: [...]` line but prints `[n redacted]` for any query on `session`, `verification`, `account` or `admin_invite` (table names from the schema via `getTableName`). The SQL text never holds a value, so it is always printed in full; every other query keeps its parameters for debugging. Production and tests still log no queries. Covered by `api/test/query-logger.test.ts`.
+
+**Alternatives considered:** Redacting every parameter loses the logger's main debugging value. Matching values that look like secrets is guesswork; the table is a reliable signal.

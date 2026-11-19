@@ -8,20 +8,18 @@ type Router = Pick<ReturnType<typeof useRouter>, "invalidate">;
  * then rerun the current route's loader(s) so `Route.useLoaderData()` picks
  * up the fresh data.
  *
- * This removes the cache entries rather than invalidating them. Two things
- * rule out `invalidateQueries`: (1) it only actively refetches queries with a
- * live `useQuery` observer (default `refetchType: "active"`) — every read
- * here goes through `ensureQueryData` in a route `loader` instead, which
- * leaves no observer; and (2) even with `refetchType: "all"`, a query that
- * was populated during SSR and hydrated onto the client has no `queryFn`
- * attached client-side (functions don't survive dehydration), so the forced
- * refetch fails with "Missing queryFn" and the query just sits in an `error`
- * state — meanwhile `ensureQueryData` ignores both the invalidated flag and
- * the error status whenever cached data already exists, and keeps handing
- * back the stale value. Removing the entry instead means the next
- * `ensureQueryData` call — from the loader `router.invalidate()` reruns,
- * which always supplies a live `queryFn` — sees an empty cache and does a
- * real fetch, sidestepping both problems at once.
+ * This removes the cache entries rather than invalidating them.
+ * `invalidateQueries` on its own refetches only queries with a live
+ * `useQuery` observer (default `refetchType: "active"`). Every read here goes
+ * through `fetchQuery` in a route `loader` and is read back with
+ * `useLoaderData()`, which leaves no observer. A forced refetch
+ * (`refetchType: "all"`) fails for a query populated during SSR, because
+ * functions don't survive dehydration and the hydrated entry has no
+ * `queryFn`. Removing the entry means the loader that `router.invalidate()`
+ * reruns finds nothing cached and fetches with its own `queryFn`. It also
+ * drops every cached variant of the list (other filters, sorts and cursors),
+ * not just the one on screen, and covers the root session read, which still
+ * uses `ensureQueryData` and so ignores the invalidated flag.
  */
 export const refreshQuery = async (
 	queryClient: QueryClient,

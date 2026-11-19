@@ -100,7 +100,7 @@ export const Route = createFileRoute("/_authenticated/disputes/")({
 	validateSearch: disputesQuerySchema,
 	loaderDeps: ({ search }) => search,
 	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData({
+		context.queryClient.fetchQuery({
 			queryKey: [...QUERY_KEYS.DISPUTES, deps],
 			queryFn: () => disputesRequest({ data: deps }),
 		}),
